@@ -70,6 +70,14 @@ app.once("ready", () => {
 	if (!globalShortcut.register("Alt+1", alt1Pressed)) {
 		console.log("failed to register alt+1 hotkey");
 	}
+	if (!app.accessibilitySupportEnabled) {
+		app.setAccessibilitySupportEnabled(true);
+	}
+	if(app.dock) {
+		app.dock.hide();
+	}
+
+	globalShortcut.register("Alt+1", alt1Pressed);
 	drawTray();
 	initIpcApi(ipcMain);
 	initRsInstanceTracking();
@@ -164,6 +172,7 @@ export class ManagedWindow {
 			width: posrect.width,
 			height: posrect.height,
 			transparent: true,
+			hasShadow: false,
 			fullscreenable: false,
 			resizable: false,//prevent electron from adding resize handlers that cover the dom around the border
 			skipTaskbar: true,
@@ -174,6 +183,8 @@ export class ManagedWindow {
 		remoteMain.enable(this.window.webContents);
 		// this.window.webContents.openDevTools({ mode: "detach" });
 
+		this.window.setVisibleOnAllWorkspaces(true, {visibleOnFullScreen: true, skipTransformProcessType: true});
+		// this.window.setAlwaysOnTop(true, "screen-saver");
 		this.nativeWindow = new OSWindow(this.window.getNativeWindowHandle());
 		this.rsClient = rsclient;
 		this.appConfig = app;
@@ -207,6 +218,13 @@ export class ManagedWindow {
 }
 
 function updateTray() {
+	if (process.platform === "darwin") {
+		tray = new Tray(alt1icon.resize({ width: 16, height: 16 }));
+	} else {
+		tray = new Tray(alt1icon);
+	}
+	tray.on("click", e => tray!.popUpContextMenu());
+	tray.setToolTip("Alt1 Lite");
 	let menu: MenuItemConstructorOptions[] = [];
 	for (let app of settings.bookmarks) {
 		menu.push({

@@ -76,7 +76,7 @@ Napi::Value GetRsHandles(const Napi::CallbackInfo &info)
 	auto handles = OSGetRsHandles();
 	auto ret = Napi::Array::New(info.Env(), handles.size());
 	for (size_t i = 0; i < handles.size(); i++) {
-		ret.Set(i, handles[i].ToJS(info.Env()));
+		ret.Set(static_cast<uint32_t>(i), handles[i].ToJS(info.Env()));
 	}
 	return ret;
 }
@@ -111,6 +111,10 @@ Napi::Value GetWindowTitle(const Napi::CallbackInfo &info)
 Napi::Value GetMouseState(const Napi::CallbackInfo &info)
 {
 	return Napi::Boolean::New(info.Env(), OSGetMouseState());
+}
+Napi::Value GetScale(const Napi::CallbackInfo &info)
+{
+	return Napi::Number::New(info.Env(), OSWindow::FromJsValue(info[0]).OSGetScale());
 }
 
 void SetWindowParent(const Napi::CallbackInfo &info)

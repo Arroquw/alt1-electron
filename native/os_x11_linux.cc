@@ -134,6 +134,11 @@ JSPoint OSGetCursorScreenPoint()
 	return p;
 }
 
+float OSWindow::OSGetScale()
+{
+	return 1.0;
+}
+
 bool OSWindow::IsValid()
 {
 	if (!this->handle) {

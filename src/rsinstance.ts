@@ -134,7 +134,7 @@ export class RsInstance extends TypedEmitter<RsInstanceEvents> {
 		}
 
 		rsInstances.push(this);
-		console.log(`new rs client tracked with handle: ${this.window.handle}`);
+		console.log(`new rs client tracked with handle: ${this.window.handle} and scale: ${this.window.getScale()}`);
 	}
 
 	closeOverlayFrame(frameid: number) {
@@ -311,9 +311,13 @@ export class RsInstance extends TypedEmitter<RsInstanceEvents> {
 	overlayCommands(frameid: number, commands: OverlayCommand[]) {
 		if (!this.overlayWindow) {
 			let bounds = this.window.getClientBounds();
+			console.log("opening overlay:", bounds);
 			let browser = new BrowserWindow({
 				webPreferences: { nodeIntegration: true, contextIsolation: false },
 				frame: false,
+				opacity: 0.5,
+				enableLargerThanScreen: true,
+				backgroundColor: "#777",
 				transparent: true,
 				x: bounds.x,
 				y: bounds.y,
@@ -325,6 +329,8 @@ export class RsInstance extends TypedEmitter<RsInstanceEvents> {
 				skipTaskbar: true,
 				focusable: false
 			});
+			browser.setVisibleOnAllWorkspaces(true, {visibleOnFullScreen: true, skipTransformProcessType: true});
+			browser.setAlwaysOnTop(true, "screen-saver");
 
 			let pin: OSWindowPin = new OSWindowPin(browser, this.window, "cover");
 			browser.loadFile(path.resolve(__dirname, "overlayframe/index.html"));
@@ -333,6 +339,7 @@ export class RsInstance extends TypedEmitter<RsInstanceEvents> {
 				this.overlayWindow = null;
 			});
 			browser.once("ready-to-show", () => {
+				console.log("ready-to-show mark");
 				browser.show();
 			});
 			browser.webContents.once("dom-ready", () => {
@@ -343,6 +350,7 @@ export class RsInstance extends TypedEmitter<RsInstanceEvents> {
 			browser.setIgnoreMouseEvents(true);
 			this.overlayWindow = { browser, pin, stalledOverlay: [{ frameid: frameid, cmd: commands }] };
 		} else {
+			console.log("overlay", JSON.stringify({frameid, commands}), null, "  ");
 			this.overlayWindow.browser.webContents.send("overlay", frameid, commands);
 		}
 	}

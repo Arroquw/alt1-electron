@@ -43,6 +43,8 @@ struct OSWindow {
 	JSRectangle GetBounds();
 	// The boundaries of the client area of the window, without any title bar of borders
 	JSRectangle GetClientBounds();
+    // Get the display scaling for this game window
+    float OSGetScale();
 	// Is the handle valid and does the window still exist
 	bool IsValid();
 	// Gets the text in the window title bar
@@ -122,3 +124,6 @@ inline void OSShutdownX11()
 {
 }
 #endif
+
+void OSSetWindowShape(__attribute__((unused)) OSWindow wnd, __attribute__((unused)) vector<JSRectangle> rects);
+

@@ -251,16 +251,16 @@ export function initIpcApi(ipcMain: IpcMain) {
 				? (((mx & 0xFFFF) << 16) | (my & 0xFFFF))
 				: -1;
 
-		const state: RsClientState = {
-			active: client.isActive,
-			clientRect: r,
-			lastActiveTime: client.lastActiveTime,
-			ping: 10, // TODO
-			scaling: 1, // TODO
-			captureMode: settings.captureMode,
-			mousePosition,
+		let wnd = expectAppWindow(e);
+		let state: RsClientState = {
+			active: wnd.rsClient.isActive,
+			clientRect: wnd.rsClient.window.getClientBounds(),
+			lastActiveTime: wnd.rsClient.lastActiveTime,
+			ping: 10,//TODO
+			scaling: wnd.rsClient.window.getScale(),
+			captureMode: settings.captureMode
 		};
-
+		console.log("rsbounds", state);
 		e.returnValue = { value: state };
 	}));
 
