@@ -1,8 +1,13 @@
 #import <cstring>
 #import <iostream>
 #import <vector>
+#import <CoreGraphics/CoreGraphics.h>
 #import "os.h"
 #import "mac/AOUtil.h"
+
+static std::atomic<int32_t> g_lastMouseX{ 0 };
+static std::atomic<int32_t> g_lastMouseY{ 0 };
+static std::atomic<bool> g_hasMousePos{ false };
 
 typedef struct filterData {
 	vector<OSWindow> wins;
@@ -16,29 +21,38 @@ JSRectangle OSWindow::GetBounds()
 	CFDictionaryRef windowInfo = [AOUtil findWindow:this->handle.winid];
 
 	CGRect screenBounds;
-	CGRectMakeWithDictionaryRepresentation(
-		(CFDictionaryRef)CFDictionaryGetValue(windowInfo, kCGWindowBounds), &screenBounds);
-	CGFloat scale = 1.0;   // Using the real scale breaks just about all alt1 stuffs
-	//    CGFloat scale = findScalingFactor(findScreenForRect(screenBounds));
-	return JSRectangle(static_cast<int>(screenBounds.origin.x * scale),
-		static_cast<int>(screenBounds.origin.y * scale),
-		static_cast<int>(screenBounds.size.width * scale),
-		static_cast<int>(screenBounds.size.height * scale));
+	if (windowInfo == nullptr) {
+		screenBounds = [[NSScreen screens][0] frame];
+	} else {
+		CGRectMakeWithDictionaryRepresentation(
+			(CFDictionaryRef)CFDictionaryGetValue(windowInfo, kCGWindowBounds),
+			&screenBounds);
+	}
+	JSRectangle jbounds(static_cast<int>(screenBounds.origin.x),
+		static_cast<int>(screenBounds.origin.y), static_cast<int>(screenBounds.size.width),
+		static_cast<int>(screenBounds.size.height));
+	return jbounds;
 }
 
 JSRectangle OSWindow::GetClientBounds()
 {
 	CFDictionaryRef windowInfo = [AOUtil findWindow:this->handle.winid];
 	CGRect screenBounds;
-	CGRectMakeWithDictionaryRepresentation(
-		(CFDictionaryRef)CFDictionaryGetValue(windowInfo, kCGWindowBounds), &screenBounds);
-	CGFloat scale = 1.0;   // Using the real scale breaks just about all alt1 stuffs
-	//    CGFloat scale = findScalingFactor(findScreenForRect(screenBounds));
-	JSRectangle jbounds = JSRectangle(static_cast<int>(screenBounds.origin.x * scale),
-		static_cast<int>(screenBounds.origin.y * scale),
-		static_cast<int>(screenBounds.size.width * scale),
-		static_cast<int>(screenBounds.size.height * scale));
-	NSLog(@"CB: (%d,%d) [%dx%d]", jbounds.x, jbounds.y, jbounds.width, jbounds.height);
+	if (windowInfo == nullptr) {
+		screenBounds = [[NSScreen screens][0] frame];
+	} else {
+		CGRectMakeWithDictionaryRepresentation(
+			(CFDictionaryRef)CFDictionaryGetValue(windowInfo, kCGWindowBounds),
+			&screenBounds);
+	}
+	BOOL isFs = [AOUtil isFullScreen:screenBounds];
+	JSRectangle jbounds(static_cast<int>(screenBounds.origin.x),
+		static_cast<int>(screenBounds.origin.y), static_cast<int>(screenBounds.size.width),
+		static_cast<int>(screenBounds.size.height));
+	if (!isFs) {
+		jbounds.y += TITLE_BAR_HEIGHT;
+		jbounds.height = jbounds.height - TITLE_BAR_HEIGHT;
+	}
 	return jbounds;
 }
 
@@ -200,29 +214,69 @@ bool OSGetMouseState()
 	return [AOUtil macOSGetMouseState];
 }
 
-void OSCaptureMulti(OSWindow wnd, CaptureMode mode, vector<CaptureRect> rects, Napi::Env env)
+void OSCaptureMulti(OSWindow wnd, __attribute__((unused)) CaptureMode mode,
+	vector<CaptureRect> rects, __attribute__((unused)) Napi::Env env)
 {
-	switch (mode) {
-	case CaptureMode::Desktop: {
-		[AOUtil OSCaptureWindowMulti:wnd withRects:rects];
-		break;
-	}
-	case CaptureMode::Window:
-		[AOUtil OSCaptureWindowMulti:wnd withRects:rects];
-		break;
-	default:
-		throw Napi::RangeError::New(env, "Capture mode not supported");
-	}
+	[AOUtil capture:wnd withRects:rects];
 }
+
+static Napi::ThreadSafeFunction g_nodeThreadTsfn;
 
 void OSNewWindowListener(OSWindow wnd, WindowEventType type, Napi::Function callback)
 {
+	if (wnd.handle.winid == 0 && type != WindowEventType::Show) {
+		return;
+	}
+
+	// If g_nodeThreadTsfn is uninitialized, we're being called directly
+	// from JS on the Node thread — safe to create TSFNs
+	if (!g_nodeThreadTsfn) {
+		auto dummy = Napi::Function::New(callback.Env(), [](const Napi::CallbackInfo &) {});
+		g_nodeThreadTsfn = Napi::ThreadSafeFunction::New(
+			callback.Env(), dummy, "nodethread", 0, 1, [](Napi::Env) {});
+	}
+
 	NSLog(@"mac: OSNewWindowListener: wnd:%lu, type:%u", wnd.handle.winid, (uint32_t)type);
-	[AOUtil macOSNewWindowListener:(CGWindowID)wnd.handle.winid type:type callback:callback];
+
+	// Capture everything by value before any async hop
+	CGWindowID winid = (CGWindowID)wnd.handle.winid;
+	WindowEventType capturedType = type;
+
+	// Persist the callback to keep the JS function alive across threads
+	auto persistedRef = std::make_shared<Napi::FunctionReference>(Napi::Persistent(callback));
+
+	// Schedule TSFN creation back onto the Node thread
+	g_nodeThreadTsfn.NonBlockingCall([persistedRef, winid, capturedType](
+						 Napi::Env env, Napi::Function) {
+		auto tsfn =
+			std::make_shared<Napi::ThreadSafeFunction>(Napi::ThreadSafeFunction::New(
+				env, persistedRef->Value(), "event", 0, 1, [](Napi::Env) {}));
+		auto ref = persistedRef;
+		dispatch_async(dispatch_get_main_queue(), ^{
+			[AOUtil macOSNewWindowListener:winid type:capturedType tsfn:tsfn ref:ref];
+		});
+	});
 }
 
 void OSRemoveWindowListener(OSWindow wnd, WindowEventType type, Napi::Function callback)
 {
 	NSLog(@"mac: OSRemoveWindowListener: wnd:%lu, type:%u", wnd.handle.winid, (uint32_t)type);
 	[AOUtil macOSRemoveWindowListener:(CGWindowID)wnd.handle.winid type:type callback:callback];
+}
+
+JSPoint OSGetCursorScreenPoint()
+{
+	if (g_hasMousePos.load(std::memory_order_relaxed)) {
+		return JSPoint((int32_t)g_lastMouseX.load(std::memory_order_relaxed),
+			(int32_t)g_lastMouseY.load(std::memory_order_relaxed));
+	}
+
+	CGEventRef event = CGEventCreate(NULL);
+	if (!event)
+		return JSPoint(0, 0);
+
+	CGPoint pt = CGEventGetLocation(event);
+	CFRelease(event);
+
+	return JSPoint(static_cast<int32_t>(pt.x), static_cast<int32_t>(pt.y));
 }
