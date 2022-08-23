@@ -169,6 +169,7 @@ export class ManagedWindow {
 				nodeIntegrationInWorker: false
 			},
 			frame: false,
+			enableLargerThanScreen: true,
 			width: posrect.width,
 			height: posrect.height,
 			transparent: true,
