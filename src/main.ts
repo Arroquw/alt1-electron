@@ -76,6 +76,14 @@ app.once("ready", () => {
 	if(app.dock) {
 		app.dock.hide();
 	}
+	if (process.platform === "darwin") {
+		if (!app.accessibilitySupportEnabled) {
+			app.setAccessibilitySupportEnabled(true);
+		}
+		if (app.dock) {
+			app.dock.hide();
+		}
+	}
 
 	globalShortcut.register("Alt+1", alt1Pressed);
 	drawTray();
