@@ -198,6 +198,10 @@ var alt1api: Partial<typeof alt1> = {
 		queueOverlayCommand({ command: "draw", time, action: { type: "rect", x, y, width, height, color, linewidth } });
 		return true;
 	},
+	overLayRectFill(color, fillColor, x, y, width, height, time, linewidth) {
+		queueOverlayCommand({ command: "draw", time, action: { type: "rectfill", x, y, width, height, color, fillColor, linewidth } });
+		return true;
+	},
 	overLayTextEx(text, color, size, x, y, time, font, center, shadow) {
 		queueOverlayCommand({ command: "draw", time, action: { type: "text", x, y, font, text, center, shadow, color, size } });
 		return true;

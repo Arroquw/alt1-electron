@@ -190,7 +190,9 @@ export class ManagedWindow {
 			show: false,
 		});
 		remoteMain.enable(this.window.webContents);
+
 		// this.window.webContents.openDevTools({ mode: "detach" });
+		this.window.setVisibleOnAllWorkspaces(true, {visibleOnFullScreen: true});
 
 		this.window.setVisibleOnAllWorkspaces(true, {visibleOnFullScreen: true, skipTransformProcessType: true});
 		// this.window.setAlwaysOnTop(true, "screen-saver");
@@ -212,6 +214,7 @@ export class ManagedWindow {
 				this.rsClient.closeOverlayFrame(this.window.webContents.id);
 			}
 			managedWindows.splice(managedWindows.indexOf(this), 1);
+			this.rsClient.overlayWindow?.browser.webContents.send("clearoverlay", this.appFrameId);
 			this.windowPin.unpin();
 			fixTooltip();
 		});

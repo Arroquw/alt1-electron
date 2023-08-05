@@ -280,6 +280,11 @@ export function initIpcApi(ipcMain: IpcMain) {
 		fixTooltip();
 	}));
 
+	ipcMain.on('clearoverlay', syncwrap((e) => {
+		let wnd = expectAppWindow(e);
+		wnd.rsClient.clearOverlay(wnd.appFrameId);
+	}));
+
 	ipcMain.on("overlay", syncwrap((e, commands: OverlayCommand[]) => {
 		const wnd = expectAppWindow(e);
 
