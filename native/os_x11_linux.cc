@@ -141,9 +141,48 @@ bool IsRsWindow(const xcb_window_t window) {
 			if (strcmp(classname, "RuneScape") == 0 || strcmp(classname, "steam_app_1343400") == 0 || strcmp(classname, "rs2client.exe") == 0) {
 				auto replyTransient = xcb_get_property_reply(connection, cookieTransient, NULL);
 				if (replyTransient && xcb_get_property_value_length(replyTransient) == 0) {
+					std::cout << "Found client: " << classname << std::endl;
 					free(replyProp);
 					return true;
 				}
+			} else if (strcmp(classname, "steam_proton") == 0) {
+				auto replyTransient = xcb_get_property_reply(connection, cookieTransient, NULL);
+				xcb_get_property_cookie_t cookie = xcb_get_property_unchecked(connection, 0, window, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 0, 100);
+				std::unique_ptr<xcb_get_property_reply_t, decltype(&free)> reply { xcb_get_property_reply(connection, cookie, NULL), &free };
+				if(reply) {
+					char* title = reinterpret_cast<char*>(xcb_get_property_value(reply.get()));
+					int length = xcb_get_property_value_length(reply.get());
+					auto str_title = std::string(title, length);
+					/* Covers both normal and compatibility mode */
+					if (str_title.find("RuneScape") != std::string::npos) {
+						if (replyTransient && xcb_get_property_value_length(replyTransient) == 0) {
+							xcb_get_geometry_cookie_t geomCookie = xcb_get_geometry(connection, window);
+							xcb_get_geometry_reply_t* geomReply = xcb_get_geometry_reply(connection, geomCookie, NULL);
+							if (geomReply) {
+								uint16_t width = geomReply->width;
+								uint16_t height = geomReply->height;
+								free(geomReply);
+								if (width == 720 && height == 480) {
+									/* The launcher window doesn't actually get killed on closing, it still exists in xwayland invisibly (Also not visible to the compositor, only to xwayland).
+									 * A workaround is to kill this window with xdotool if it matches this exact window size (it does not change) in for instance a .desktop file of the jagex launcher.
+									 * This native code could also possibly do this, but it's probably out of scope.
+									 * The window has few other ways to identify it as the window's class and title are exactly the same.
+									 * */
+									std::cout << "Found RuneScape Launcher phantom window: " << width << "x" << height << "\n";
+								} else {
+									std::cout << "Found correct RuneScape window: " << str_title << std::endl;
+									free(replyProp);
+									return true;
+								}
+							}
+						} else {
+							std::cout << "NonTransient window found: " << str_title << std::endl;
+						}
+					} else {
+						std::cout << "Wrong title: " << str_title << std::endl;
+					}
+				}
+
 			}
 		}
 	}
