@@ -138,14 +138,14 @@ bool IsRsWindow(const xcb_window_t window) {
 			memcpy(buffer, xcb_get_property_value(replyProp), len);
 			// first is instance name, then class name - both null terminated. we want class name.
 			const char* classname = buffer + strlen(buffer) + 1;
-			if (strcmp(classname, "RuneScape") == 0 || strcmp(classname, "steam_app_1343400") == 0 || strcmp(classname, "rs2client.exe") == 0) {
+			if (strcmp(classname, "RuneScape") == 0 || strcmp(classname, "steam_app_1343400") == 0) {
 				auto replyTransient = xcb_get_property_reply(connection, cookieTransient, NULL);
 				if (replyTransient && xcb_get_property_value_length(replyTransient) == 0) {
 					std::cout << "Found client: " << classname << std::endl;
 					free(replyProp);
 					return true;
 				}
-			} else if (strcmp(classname, "steam_proton") == 0) {
+			} else if (strcmp(classname, "steam_proton") || strcmp(classname, "rs2client.exe") == 0) {
 				auto replyTransient = xcb_get_property_reply(connection, cookieTransient, NULL);
 				xcb_get_property_cookie_t cookie = xcb_get_property_unchecked(connection, 0, window, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 0, 100);
 				std::unique_ptr<xcb_get_property_reply_t, decltype(&free)> reply { xcb_get_property_reply(connection, cookie, NULL), &free };
