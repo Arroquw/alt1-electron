@@ -150,25 +150,9 @@ bool IsRsWindow(const xcb_window_t window) {
 					/* Covers both normal and compatibility mode (substring of RuneScape (compatibility mode) )*/
 					if (str_title.find("RuneScape") != std::string::npos) {
 						if (replyTransient && xcb_get_property_value_length(replyTransient) == 0) {
-							xcb_get_geometry_cookie_t geomCookie = xcb_get_geometry(connection, window);
-							xcb_get_geometry_reply_t* geomReply = xcb_get_geometry_reply(connection, geomCookie, NULL);
-							if (geomReply) {
-								uint16_t width = geomReply->width;
-								uint16_t height = geomReply->height;
-								free(geomReply);
-								if (width == 720 && height == 480) {
-									/* The launcher window doesn't actually get killed on closing, it still exists in xwayland invisibly (Also not visible to the wayland compositor, only to xwayland).
-									 * A workaround is to kill this window with xdotool if it matches this exact window size (it does not change) in for instance a .desktop file of the jagex launcher.
-									 * This native code could also possibly do this, but it's probably out of scope.
-									 * The native code has no other ways to identify it as the window's class and title are exactly the same as the actual game window.
-									 * */
-									std::cout << "Found RuneScape Launcher phantom window: " << width << "x" << height << "\n";
-								} else {
-									std::cout << "Found correct RuneScape window: " << str_title << std::endl;
-									free(replyProp);
-									return true;
-								}
-							}
+							std::cout << "Found correct RuneScape window: " << str_title << std::endl;
+							free(replyProp);
+							return true;
 						} else {
 							std::cout << "NonTransient window found: " << str_title << std::endl;
 						}
