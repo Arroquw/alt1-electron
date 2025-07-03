@@ -147,7 +147,7 @@ bool IsRsWindow(const xcb_window_t window) {
 					int length = xcb_get_property_value_length(reply.get());
 					auto str_title = std::string(title, length);
 					/* Covers both normal and compatibility mode (substring of RuneScape (compatibility mode) )*/
-					if (str_title.find("RuneScape") != std::string::npos) {
+					if (str_title.compare(0, sizeof("RuneScape") - 1, "RuneScape") == 0) {
 						if (replyTransient && xcb_get_property_value_length(replyTransient) == 0) {
 							free(replyProp);
 							return true;
