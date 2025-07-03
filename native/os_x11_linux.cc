@@ -139,7 +139,6 @@ bool IsRsWindow(const xcb_window_t window) {
 			// first is instance name, then class name - both null terminated. we want class name.
 			const char* classname = buffer + strlen(buffer) + 1;
 			if (strcmp(classname, "RuneScape") == 0 || strcmp(classname, "steam_app_1343400") == 0 || strcmp(classname, "steam_proton") == 0 || strcmp(classname, "rs2client.exe") == 0) {
-				std::cout << "Found classname: " << classname << std::endl;
 				auto replyTransient = xcb_get_property_reply(connection, cookieTransient, NULL);
 				xcb_get_property_cookie_t cookie = xcb_get_property_unchecked(connection, 0, window, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 0, 100);
 				std::unique_ptr<xcb_get_property_reply_t, decltype(&free)> reply { xcb_get_property_reply(connection, cookie, NULL), &free };
@@ -150,14 +149,11 @@ bool IsRsWindow(const xcb_window_t window) {
 					/* Covers both normal and compatibility mode (substring of RuneScape (compatibility mode) )*/
 					if (str_title.find("RuneScape") != std::string::npos) {
 						if (replyTransient && xcb_get_property_value_length(replyTransient) == 0) {
-							std::cout << "Found correct RuneScape window: " << str_title << std::endl;
 							free(replyProp);
 							return true;
 						} else {
 							std::cout << "NonTransient window found: " << str_title << std::endl;
 						}
-					} else {
-						std::cout << "Wrong title: " << str_title << std::endl;
 					}
 				}
 
