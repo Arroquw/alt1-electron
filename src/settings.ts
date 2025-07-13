@@ -1,6 +1,8 @@
 import Checks, { UservarType } from "../tempexternal/typecheck";
 import * as fs from "fs";
-import { configFile, readJsonWithBOM, weborigin } from "./lib";
+import * as os from 'os';
+import * as path from 'path';
+import { readJsonWithBOM, weborigin } from "./lib";
 import fetch from "node-fetch";
 import { CaptureMode } from "./native";
 import { TypedEmitter } from "./typedemitter";
@@ -51,6 +53,42 @@ type SettingsEvents = {
 	changed: []
 }
 
+function getPlatformConfigPath(filename: string): string {
+	const platform = process.platform;
+	const home = os.homedir();
+	const appName = "alt1";
+
+	if (platform === 'win32') {
+		const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
+		return path.join(appData, appName, filename);
+	}
+	else if (platform === 'darwin') {
+		return path.join(home, 'Library', 'Preferences', appName, filename);
+	}
+	else {
+		// Linux and other Unix-like systems
+		const xdgConfig = process.env.XDG_CONFIG_HOME || path.join(home, '.config');
+		return path.join(xdgConfig, appName, filename);
+	}
+}
+
+const configFileName = "config.json";
+const configFile = process.env.ALT1_CONFIG_FILE ||
+	(process.env.NODE_ENV === "development" ?
+		path.join(__dirname, configFileName) :
+		getPlatformConfigPath(configFileName));
+
+
+// Ensure the config directory exists
+try {
+	const configDir = path.dirname(configFile);
+	if (!fs.existsSync(configDir)) {
+		fs.mkdirSync(configDir, { recursive: true });
+	}
+} catch (e) {
+	console.error("Could not create config directory:", e);
+}
+
 class ManagedSettings extends TypedEmitter<SettingsEvents> {
 	settings: Settings;
 	appconfig: AppConfig;
@@ -69,15 +107,18 @@ class ManagedSettings extends TypedEmitter<SettingsEvents> {
 	 * Called on top-level, where await is not possible. Default settings are loaded in the background.
 	 */
 	loadOrFetch() {
+		console.log("Reading from path");
+		console.log(this.path);
 		try {
 			let file = JSON.parse(fs.readFileSync(this.path, "utf8"));
 			this.settings = checkSettings.load(file, { defaultOnError: true });
 			this.appconfig.setBookmarks(this.settings.bookmarks);
 		} catch (e) {
 			console.log("couldn't load config");
+			console.log(e);
 			this.settings = checkSettings.default();
 			this.appconfig.setBookmarks(this.settings.bookmarks);
-	
+
 			fetch(`${weborigin}/data/alt1/defaultapps.json`).then(r => readJsonWithBOM(r)).then(async (r: { folder: string, name: string, url: string }[]) => {
 				for (let appbase of r) {
 					await this.appconfig.identifyApp(new URL(`${weborigin}${appbase.url}`));
@@ -97,8 +138,8 @@ class ManagedSettings extends TypedEmitter<SettingsEvents> {
 	}
 
 
-	set captureMode(mode: CaptureMode) { 
-		if (!Object.keys(checkSettings.props.captureMode.opts).includes(mode)) { 
+	set captureMode(mode: CaptureMode) {
+		if (!Object.keys(checkSettings.props.captureMode.opts).includes(mode)) {
 			console.log("unknown capture mode", mode);
 			return;
 		}
