@@ -145,10 +145,8 @@ var alt1api: Partial<typeof alt1> = {
 		const raw = atob(imgstr);
 		var height = raw.length / 4 / imgwidth;
 		if (!Number.isInteger(height)) {
-			console.log("flooring height: ", height);
 			height = Math.floor(height);
 			if (!Number.isInteger(height)) {
-				console.log("Height actually:", height);
 				throw new Error("Invalid data or width: height not an int");
 			}
 		}
