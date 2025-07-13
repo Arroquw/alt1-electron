@@ -2,6 +2,7 @@
 import type * as alt1types from "alt1";
 import { ipcRenderer } from "electron";
 import { FlatImageData, SyncResponse, OverlayCommand, RsClientState } from "../shared";
+import { decodeImageString } from "alt1";
 
 let warningsTriggered: string[] = [];
 function warn(key: string, message: string) {
@@ -141,8 +142,27 @@ var alt1api: Partial<typeof alt1> = {
 		return alt1.overLayTextEx(text, color, size, x, y, time, "", false, true);
 	},
 	overLayImage(x, y, imgstr, imgwidth, time) {
-		warn("overlayimg", "alt1.overLayImage is not implemented");
-		return false;
+		const raw = atob(imgstr);
+		var height = raw.length / 4 / imgwidth;
+		if (!Number.isInteger(height)) {
+			console.log("flooring height: ", height);
+			height = Math.floor(height);
+			if (!Number.isInteger(height)) {
+				console.log("Height actually:", height);
+				throw new Error("Invalid data or width: height not an int");
+			}
+		}
+		var sprite = new ImageData(imgwidth, height);
+		decodeImageString(imgstr, sprite, 0, 0, imgwidth, height);
+		let flatImageData: FlatImageData = {
+			data: sprite.data,
+			width: imgwidth,
+			height: height,
+		};
+		if (sprite.height > 0 && sprite.width > 0) {
+			queueOverlayCommand({ command: "draw", time, action: { type: "sprite", x, y, sprite: flatImageData } });
+		}
+		return true;
 	},
 	overLaySetGroup(groupid: string) { queueOverlayCommand({ command: "setgroup", groupid }); },
 	overLaySetGroupZIndex(groupid: string, zindex: number) { queueOverlayCommand({ command: "setgroupzindex", groupid, zindex }); },

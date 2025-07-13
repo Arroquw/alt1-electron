@@ -38,7 +38,7 @@ export function relPath(relpath: string) {
 
 export function patchImageDataShow() {
 	if (process.env.NODE_ENV === "development") {
-		(ImageData.prototype.show as any) = function (this: ImageData) { showImageData(this); }
+		(ImageData.prototype.show as any) = function(this: ImageData) { showImageData(this); }
 	}
 }
 

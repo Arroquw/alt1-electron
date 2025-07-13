@@ -154,7 +154,11 @@ function redraw(now: number, force = false) {
 					ctx.textBaseline = act.center ? "middle" : "top";
 					ctx.fillText(act.text, act.x, act.y);
 				} else if (act.type == "sprite") {
-					//TODO
+					// Check if width and height are valid positive numbers before drawing
+					if (act.sprite.width > 0 && act.sprite.height > 0) {
+						const imageData = new ImageData(act.sprite.data, act.sprite.width, act.sprite.height);
+						ctx.putImageData(imageData, act.x, act.y);
+					}
 				}
 			}
 		}

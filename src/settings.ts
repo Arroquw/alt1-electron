@@ -97,8 +97,8 @@ class ManagedSettings extends TypedEmitter<SettingsEvents> {
 	}
 
 
-	set captureMode(mode: CaptureMode) { 
-		if (!Object.keys(checkSettings.props.captureMode.opts).includes(mode)) { 
+	set captureMode(mode: CaptureMode) {
+		if (!Object.keys(checkSettings.props.captureMode.opts).includes(mode)) {
 			console.log("unknown capture mode", mode);
 			return;
 		}
