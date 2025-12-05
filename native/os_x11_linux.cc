@@ -304,7 +304,7 @@ void OSSetWindowShape(OSWindow window, std::vector<JSRectangle> rects) {
 	uint8_t ordering = 0;
 	if (xrects.size() < 2) ordering = 3;
 	//TODO this 5k x 5k special case is weird, implement separate clear call again?
-	if (rects.size() == 1 && rects[1].width >= 5000 && rects[1].height >= 5000) {
+	if (rects.size() == 1 && rects[0].width >= 5000 && rects[0].height >= 5000) {
 		xcb_shape_mask(connection, 0, XCB_SHAPE_SK_INPUT, window.handle, 0, 0, 0);
 	}
 	else {
