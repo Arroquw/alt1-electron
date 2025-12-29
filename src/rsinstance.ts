@@ -159,7 +159,7 @@ export class RsInstance extends TypedEmitter<RsInstanceEvents> {
 		if (!native.getMouseState()) {
 			//need to wait for 2 frames to get rendered (doublebuffered)
 			await delay(2 * 50);
-			let mousescreen = this.overlayWindow?.pin?.getMousePos() ?? electron.screen.getCursorScreenPoint();
+			let mousescreen = electron.screen.getCursorScreenPoint();
 			let mousepos = this.screenToClient(mousescreen);
 			let captrect = new Rect(mousepos.x - 300, mousepos.y - 300, 600, 600);
 			captrect.intersect({ x: 0, y: 0, ...this.getClientSize() });
@@ -222,8 +222,9 @@ export class RsInstance extends TypedEmitter<RsInstanceEvents> {
 
 	alt1Pressed() {
 		// let mousescreen =
-		let mousescreen = this?.overlayWindow?.pin?.getMousePos() ?? electron.screen.getCursorScreenPoint();
+		let mousescreen = electron.screen.getCursorScreenPoint();
 		let mousepos = this.screenToClient(mousescreen);
+		console.log("ALT1PRESS", Date.now(), "handle", this.window.handle);
 		console.log("MOUSESCREEN: ", mousescreen);
 		console.log("MOUSEPOS: ", mousepos);
 

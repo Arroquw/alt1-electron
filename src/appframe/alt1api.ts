@@ -65,7 +65,7 @@ let lastRsInfo: SyncResponse<RsClientState> = null!;
 let lastRsInfoTime = 0;
 function getRsInfo() {
 	let info = lastRsInfo;
-	if (lastRsInfoTime < Date.now() - 500) {
+	if (lastRsInfoTime < Date.now() - 100) {
 		info = ipcRenderer.sendSync("rsbounds");
 		lastRsInfo = info;
 		lastRsInfoTime = Date.now();

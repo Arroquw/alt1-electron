@@ -233,18 +233,32 @@ export function initIpcApi(ipcMain: IpcMain) {
 	});
 
 	ipcMain.on("rsbounds", syncwrap((e) => {
-		let client = expectPermittedRsClient(e);
-		let mousePos = client.overlayWindow?.pin?.getMousePos();
-		let state: RsClientState = {
+		const client = expectPermittedRsClient(e);
+
+		const cur = screen.getCursorScreenPoint();
+		const r = client.window.getClientBounds();
+
+		// screen -> rs client coords
+		const mx = cur.x - r.x;
+		const my = cur.y - r.y;
+
+		const mousePosition =
+			(mx >= 0 && my >= 0 && mx < r.width && my < r.height)
+			  ? (((mx & 0xFFFF) << 16) | (my & 0xFFFF))
+			  : -1;
+		console.log("RSBOUNDS cur", cur, "rect", r, "mxmy", mx, my, "packed", mousePosition);
+
+		const state: RsClientState = {
 			active: client.isActive,
-			clientRect: client.window.getClientBounds(),
+			clientRect: r,
 			lastActiveTime: client.lastActiveTime,
-			ping: 10,//TODO
-			scaling: 1,//TODO
+			ping: 10, // TODO
+			scaling: 1, // TODO
 			captureMode: settings.captureMode,
-			mousePosition: mousePos !== undefined ? (mousePos.x << 16 | (mousePos.y & 0xFFFF)) : -1,
+			mousePosition,
 		};
-		e.returnValue = { value: state };
+
+	  e.returnValue = { value: state };
 	}));
 
 	ipcMain.handle("capture", (e: any, x: any, y: any, width: any, height: any) => {
