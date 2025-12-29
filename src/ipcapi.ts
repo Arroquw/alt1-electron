@@ -290,10 +290,16 @@ export function initIpcApi(ipcMain: IpcMain) {
 		}
 	});
 
-	ipcMain.handle("installapp", async (e, url) => {
-		if (isAdmin(e)) {
-			await settings.appconfig.identifyApp(new URL(url));
-		}
+	ipcMain.handle("installapp_preview", async (e, input: string) => {
+	  if (isAdmin(e)) {
+		return await settings.appconfig.previewInstall(input);
+	  }
+	});
+
+	ipcMain.handle("installapp_confirm", async (e, normalizedUrl: string) => {
+	  if (isAdmin(e)) {
+		return await settings.appconfig.confirmInstall(normalizedUrl);
+	  }
 	});
 
 	ipcMain.handle("getsettings", (e) => {

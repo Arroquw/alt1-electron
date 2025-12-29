@@ -51,20 +51,73 @@ interface AppSettingsProps {
 
 interface AppSettingsState {
 	configUrl: string;
+	pending: null | { normalizedUrl: string; appName: string; description: string };
+	status: string;
+	error: string;
+	busy: boolean;
 }
 
 class AppSettings extends React.Component<AppSettingsProps, AppSettingsState> {
 	constructor(props) {
 		super(props);
 		this.state = {
-			configUrl: ""
+			configUrl: "",
+			pending: null,
+			status: "",
+			error: "",
+			busy: false
+		};
+	}
+
+	async addAppSubmit(e) {
+		e.preventDefault();
+
+		const input = this.state.configUrl.trim();
+		if (!input) { return; }
+
+		this.setState({ busy: true, error: "", status: "", pending: null });
+
+		try {
+		const res = await ipcRenderer.invoke("installapp_preview", input);
+		// res: { normalizedUrl: string, config: AppConfigImport }
+		this.setState({
+			pending: {
+			normalizedUrl: res.normalizedUrl,
+			appName: res.config.appName,
+			description: res.config.description || ""
+			},
+			busy: false
+		});
+		} catch (err: any) {
+		this.setState({
+			error: err?.message ?? String(err),
+			busy: false
+		});
 		}
 	}
 
-	addAppSubmit(e) {
-		ipcRenderer.invoke("installapp", this.state.configUrl);
-		this.setState({ configUrl: "" });
-		e.preventDefault();
+	async confirmInstall() {
+		if (!this.state.pending) { return; }
+
+		this.setState({ busy: true, error: "", status: "" });
+		try {
+		await ipcRenderer.invoke("installapp_confirm", this.state.pending.normalizedUrl);
+		this.setState({
+			status: `Installed ${this.state.pending.appName}`,
+			configUrl: "",
+			pending: null,
+			busy: false
+		});
+		} catch (err: any) {
+		this.setState({
+			error: err?.message ?? String(err),
+			busy: false
+		});
+		}
+	}
+
+	cancelInstall() {
+		this.setState({ pending: null, error: "", status: "" });
 	}
 
 	render() {
@@ -84,6 +137,21 @@ class AppSettings extends React.Component<AppSettingsProps, AppSettingsState> {
 				<label>Config URL <input type="text" value={this.state.configUrl} onChange={e => this.setState({ configUrl: e.target.value })} /></label>
 				<button type="submit">Add App</button>
 			</form>
+			{this.state.pending && (
+				<div style={{ marginTop: "1rem" }}>
+					<div>
+						Install <b>{this.state.pending.appName}</b>?
+					</div>
+					{this.state.pending.description && <div>{this.state.pending.description}</div>}
+					<div style={{ marginTop: ".5rem" }}>
+						<button onClick={this.confirmInstall.bind(this)} disabled={this.state.busy}>Yes</button>
+						<button onClick={this.cancelInstall.bind(this)} disabled={this.state.busy}>No</button>
+					</div>
+				</div>
+			)}
+
+			{this.state.status && <div style={{ marginTop: "1rem" }}>{this.state.status}</div>}
+			{this.state.error && <div style={{ marginTop: "1rem" }}><b>Error:</b> {this.state.error}</div>}
 		</React.Fragment>;
 	}
 }

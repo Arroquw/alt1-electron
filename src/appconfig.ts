@@ -133,8 +133,62 @@ export class AppConfig extends TypedEmitter<AppConfigEvents> {
 		if (idx == -1) {
 			throw new UserError("App is already uninstalled");
 		}
-	
+
 		this.bookmarks.splice(idx, 1);
 		this.emit("changed");
+	}
+
+	private normalizeInstallInput(raw: string): string {
+		let s = (raw ?? "").trim();
+		if (!s) { throw new UserError("Paste an app URL or an appconfig.json URL."); }
+
+		if (s.toLowerCase().startsWith("alt1://addapp/")) {
+			s = s.slice("alt1://addapp/".length);
+		} else if (s.toLowerCase().startsWith("alt1://")) {
+			throw new UserError("Paste the app's appconfig.json URL (not an alt1:// link).");
+		}
+
+		// Assume https if user pasted bare domain/path
+		if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(s)) {
+			s = `https://${s}`;
+		}
+		return s;
+	}
+
+	private candidateConfigUrls(input: string): URL[] {
+		const base = new URL(input);
+		const p = base.pathname.toLowerCase();
+
+		if (p.endsWith("/appconfig.json") || p.endsWith(".json")) {
+			return [base];
+		}
+
+		const baseHref = base.href.endsWith("/") ? base.href : `${base.href}/`;
+		return [
+			new URL("appconfig.json", baseHref),
+			new URL("dist/appconfig.json", baseHref),
+		];
+	}
+
+	async previewInstall(raw: string) {
+		const normalizedInput = this.normalizeInstallInput(raw);
+		const candidates = this.candidateConfigUrls(normalizedInput);
+
+		for (const url of candidates) {
+			try {
+				const res: unknown = await fetch(url.href).then(r => readJsonWithBOM(r));
+				const config = checkAppConfigImport.load(res, { defaultOnError: true });
+				return { normalizedUrl: url.href, config };
+			} catch {
+				// try next candidate
+			}
+		}
+		throw new UserError("Could not find a valid appconfig.json at that URL.");
+	}
+
+	async confirmInstall(normalizedUrl: string) {
+		const app = await this.identifyApp(new URL(normalizedUrl));
+		if (!app) { throw new UserError("Install failed."); }
+		return app;
 	}
 }
