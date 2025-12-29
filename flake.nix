@@ -124,12 +124,14 @@
 
             installPhase = ''
               runHook preInstall
-              npm run native
               if [ "${variant}" == "debug" ]; then
                 npm run build -- --mode development
+                npm run native
               else
                 npm run build -- --mode production
+                npm run nativerelease
               fi
+
               # resources
               mkdir -p "$out/share/lib/alt1lite" "$out/bin" "$out/share/lib/alt1lite/dist/tooltip/"
               ls -alh ./build
