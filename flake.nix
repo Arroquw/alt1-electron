@@ -9,16 +9,10 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
 
-        x11Deps = with pkgs; [
-          pkg-config
-          xorg.libxcb
-          xorg.xcbutilwm
-        ];
+        x11Deps = with pkgs; [ pkg-config xorg.libxcb xorg.xcbutilwm ];
 
         devDeps = [
           pkgs.libgbm
-          pkgs.nodejs
-          pkgs.yarn
           pkgs.python3
           pkgs.pkg-config
           pkgs.gnumake
@@ -58,7 +52,6 @@
           pkgs.nodejs
           pkgs.pkg-config
           pkgs.gcc
-
         ];
 
         electronDeps = with pkgs;
@@ -72,11 +65,13 @@
             src = ./.;
             inherit system;
 
-            yarnOfflineCache = pkgs.fetchYarnDeps {
-              yarnLock = "${finalAttrs.src}" + "/yarn.lock";
-              hash = "sha256-QecHjsz6R/tP+X93WopetT+pIrEMeMrTBWGSY6pyEOI=";
+            npmDeps = pkgs.fetchNpmDeps {
+              src = finalAttrs.src;
+              packageLock = "${finalAttrs.src}/package-lock.json";
+              hash = "sha256-aNXroirHXtqd4oUr6qzRbt+qmzhKXBwpdGB8Bz4v0JQ=";
             };
 
+            makeCacheWritable = true;
             env = {
               ELECTRON_SKIP_BINARY_DOWNLOAD = "1";
               npm_config_nodedir = pkgs.electron.headers;
@@ -102,11 +97,10 @@
             buildInputs = electronDeps;
 
             nativeBuildInputs = [
-              pkgs.yarnConfigHook
-              pkgs.yarnBuildHook
+              pkgs.npmHooks.npmConfigHook
+              pkgs.npmHooks.npmBuildHook
               pkgs.npmHooks.npmInstallHook
               pkgs.nodejs
-              pkgs.typescript
               pkgs.pkg-config
               pkgs.makeWrapper
               pkgs.vips
@@ -114,6 +108,7 @@
               pkgs.vips.dev
               (pkgs.python311.withPackages (ps: [ ps.distutils ]))
             ];
+            dontNpmBuild = true;
 
             preConfigure = ''
               export npm_config_target=${pkgs.electron.version}
@@ -124,25 +119,20 @@
               export npm_config_build_from_source=true
             '';
 
-            yarnBuildScript = "electron-rebuild";
-
-            yarnBuildFlags = [
-              "-w alt1lite"
-              "-c.electronDist=${pkgs.electron}/libexec/electron"
-              "-c.electronVersion=${pkgs.electron.version}"
-            ] ++ (if variant == "debug" then [ "--debug" ] else [ ]);
+            npmFlags = [ "--ignore-scripts" "--no-audit" "--no-fund" ];
+            npmInstallFlags = [ "--offline" "--no-progress" ];
 
             installPhase = ''
               runHook preInstall
               if [ "${variant}" == "debug" ]; then
-                yarn --offline electron-rebuild -f -w alt1lite --only sharp -c.electronDist=${pkgs.electron}/libexec/electron -c.electronVersion=${pkgs.electron.version}
-                yarn --offline build --mode development
+                npm run native
+                npm run build -- --mode development
               else
-                yarn --offline build --mode production
+                npm run native
+                npm run build -- --mode production
               fi
               # resources
-              mkdir -p "$out/share/lib/alt1lite" "$out/bin"
-              mkdir -p "$out/share/lib/alt1lite/dist/tooltip/"
+              mkdir -p "$out/share/lib/alt1lite" "$out/bin" "$out/share/lib/alt1lite/dist/tooltip/"
               ls -alh ./build
               cp -r ./dist "$out/share/lib/alt1lite"
               cp -r ./node_modules "$out/share/lib/alt1lite"
@@ -152,6 +142,7 @@
               cp -r ./config.json "$out/share/lib/alt1lite/dist/tooltip/"
               ln -s "$out/share/lib/alt1lite/dist/tooltip/config.json" "$out/share/lib/alt1lite/dist/config.json"
               # executable wrapper
+
               makeWrapper '${pkgs.electron}/bin/electron' "$out/bin/alt1lite" \
                 --add-flags "--inspect=9228 $out/share/lib/alt1lite/dist/alt1lite.bundle.js"
 
