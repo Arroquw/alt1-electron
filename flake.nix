@@ -68,7 +68,7 @@
             npmDeps = pkgs.fetchNpmDeps {
               src = finalAttrs.src;
               packageLock = "${finalAttrs.src}/package-lock.json";
-              hash = "sha256-aNXroirHXtqd4oUr6qzRbt+qmzhKXBwpdGB8Bz4v0JQ=";
+              hash = "sha256-9P7b+2av1UNxbsbFO5C3UPF8aEWX1MD1ahvtmjQjVRc=";
             };
 
             makeCacheWritable = true;
@@ -124,11 +124,10 @@
 
             installPhase = ''
               runHook preInstall
+              npm run native
               if [ "${variant}" == "debug" ]; then
-                npm run native
                 npm run build -- --mode development
               else
-                npm run native
                 npm run build -- --mode production
               fi
               # resources
