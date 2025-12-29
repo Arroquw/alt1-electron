@@ -92,12 +92,28 @@ class ManagedSettings extends TypedEmitter<SettingsEvents> {
 	appconfig: AppConfig;
 	path: string;
 
+	private saveTimer: NodeJS.Timeout | null = null;
+
+	private scheduleSave() {
+		if (this.saveTimer) clearTimeout(this.saveTimer);
+		this.saveTimer = setTimeout(() => {
+			try {
+				this.save();
+			} catch (e) {
+				console.error("Failed to save settings:", e);
+			}
+		}, 250);
+	}
+
 	constructor(path: string) {
 		super();
 		this.path = path;
 		this.settings = checkSettings.default();
 		this.appconfig = new AppConfig(this.settings.bookmarks);
-		this.appconfig.on("changed", () => this.emit("changed"));
+		this.appconfig.on("changed", () => {
+			this.scheduleSave();
+			this.emit("changed");
+		});
 	}
 
 	/**
@@ -141,6 +157,7 @@ class ManagedSettings extends TypedEmitter<SettingsEvents> {
 			return;
 		}
 		this.settings.captureMode = mode;
+		this.scheduleSave();
 		this.emit("changed");
 	}
 
