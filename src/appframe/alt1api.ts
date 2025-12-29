@@ -70,12 +70,18 @@ function getRsInfo() {
 		lastRsInfo = info;
 		lastRsInfoTime = Date.now();
 	}
+	
 	if (info.error != undefined) {
-		if (lastRsInfoTime == 0) {
-			return getRsInfo();
+		if (String(info.error).includes("no permitted RS Client") || String(info.error).includes("not bound")) {
+			lastRsInfoTime = 0;
+			let retry = ipcRenderer.sendSync("rsbounds");
+			lastRsInfo = retry;
+			lastRsInfoTime = Date.now();
+			if (retry.error == undefined) return retry.value;
 		}
 		throw new Error(info.error);
 	}
+
 	return info.value;
 }
 
