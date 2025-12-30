@@ -65,13 +65,15 @@ let lastRsInfo: SyncResponse<RsClientState> = null!;
 let lastRsInfoTime = 0;
 function getRsInfo() {
 	let info = lastRsInfo;
-	if (lastRsInfoTime < Date.now() - 100) {
+	if (lastRsInfoTime < Date.now() - 100) { // Decreased from 500ms to sync faster than plugin timers. Slightly experimental.
 		info = ipcRenderer.sendSync("rsbounds");
 		lastRsInfo = info;
 		lastRsInfoTime = Date.now();
 	}
 
 	if (info.error != undefined) {
+		// Retry permissions to rule out race conditions.
+		// This shouldn't ever fail with a bound client, and won't run if the game isn't open.
 		if (String(info.error).includes("no permitted RS Client") || String(info.error).includes("not bound")) {
 			lastRsInfoTime = 0;
 			let retry = ipcRenderer.sendSync("rsbounds");

@@ -9,7 +9,7 @@
 		"watch": "npm run build -- --watch",
 		"ui": "electron --inspect=9228 ./dist/alt1lite.bundle.js",
 		"native": "npm run nativerelease -- --debug",
-		"nativerelease": "npx electron-rebuild -f -w alt1lite",
+		"nativerelease": "electron-rebuild -f -w alt1lite",
 		"install": "npm run native"
 	},
 	"author": "",

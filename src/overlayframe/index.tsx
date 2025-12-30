@@ -53,11 +53,6 @@ ipcRenderer.on("closeframe", (e, frameid: number) => {
 });
 
 function parseCommands(frameid: number, commands: OverlayCommand[]) {
-	console.log(
-  "OVERLAY cmds",
-  frameid,
-  commands.map(c => c.command === "draw" ? `draw:${c.action.type}` : c.command)
-);
 	let now = Date.now();
 	let framestate = findFrameState(frameid);
 	let currentgroup = framestate.currentgroup;
