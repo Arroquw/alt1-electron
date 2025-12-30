@@ -212,6 +212,11 @@ function syncwrap(fn: (e: Electron.IpcMainEvent, ...args: any[]) => any) {
 	}
 }
 
+function getHostBrowserWindow(e: IpcMainEvent | IpcMainInvokeEvent) {
+	const hostWc = (e.sender as any).hostWebContents ?? e.sender;
+	return BrowserWindow.fromWebContents(hostWc);
+}
+
 export function initIpcApi(ipcMain: IpcMain) {
 	ipcMain.on("identifyapp", async (e, configurl) => {
 		try {
@@ -246,7 +251,6 @@ export function initIpcApi(ipcMain: IpcMain) {
 			(mx >= 0 && my >= 0 && mx < r.width && my < r.height)
 			  ? (((mx & 0xFFFF) << 16) | (my & 0xFFFF))
 			  : -1;
-		console.log("RSBOUNDS cur", cur, "rect", r, "mxmy", mx, my, "packed", mousePosition);
 
 		const state: RsClientState = {
 			active: client.isActive,
@@ -278,9 +282,13 @@ export function initIpcApi(ipcMain: IpcMain) {
 	}));
 
 	ipcMain.on("overlay", syncwrap((e, commands: OverlayCommand[]) => {
-		//TODO errors here are not rethrown in app, just swallow and log them
-		let wnd = expectAppWindow(e);
-		wnd.rsClient.overlayCommands(wnd.appFrameId, commands);
+		const wnd = expectAppWindow(e);
+
+		const hostWin = getHostBrowserWindow(e);
+		if (!hostWin) throw new Error("No host BrowserWindow for overlay sender");
+
+		const frameid = hostWin.webContents.id;
+		wnd.rsClient.overlayCommands(frameid, commands);
 	}));
 
 	ipcMain.on("dragwindow", syncwrap((e, left, top, right, bot) => {

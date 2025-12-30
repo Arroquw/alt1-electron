@@ -16,7 +16,12 @@ let redrawtimer = 0;
 let shutdowntimer = 0;
 const shutdowntimeout = 30 * 1000;
 
-window.addEventListener("resize", e => redraw(Date.now(), true));
+function resizeCanvas() {
+  cnv.width = cnv.clientWidth;
+  cnv.height = cnv.clientHeight;
+}
+window.addEventListener("resize", () => { resizeCanvas(); redraw(Date.now(), true); });
+resizeCanvas();
 
 function findFrameState(frameid: number) {
 	let s = framestates.get(frameid);
@@ -40,24 +45,39 @@ ipcRenderer.on("overlay", (e, frameid: number, commands) => {
 
 ipcRenderer.on("closeframe", (e, frameid: number) => {
 	framestates.delete(frameid);
-	groupstates = groupstates.filter(q => q.frameid == frameid);
+	groupstates = groupstates.filter(q => q.frameid != frameid);
 	redraw(Date.now());
+	if (groupstates.length === 0) {
+		window.close();
+	}
 });
 
 function parseCommands(frameid: number, commands: OverlayCommand[]) {
+	console.log(
+  "OVERLAY cmds",
+  frameid,
+  commands.map(c => c.command === "draw" ? `draw:${c.action.type}` : c.command)
+);
 	let now = Date.now();
 	let framestate = findFrameState(frameid);
 	let currentgroup = framestate.currentgroup;
+	const DEFAULT_TTL_MS = 1500;
 	for (let c of commands) {
-		if (c.command == "draw") {
-			currentgroup.primitives.push({ visible: !currentgroup.frozen, deleted: false, endtime: now + c.time, action: c.action });
-			if (!currentgroup.frozen) { currentgroup.nextupdate = 0; }
+		if (c.command === "draw") {
+			const ttl = (typeof c.time === "number" && c.time > 0) ? c.time : DEFAULT_TTL_MS;
+			currentgroup.primitives.push({
+				visible: !currentgroup.frozen,
+				deleted: false,
+				endtime: now + ttl,
+				action: c.action,
+			});
+			if (!currentgroup.frozen) currentgroup.nextupdate = 0;
 		} else if (c.command == "setgroup") {
 			currentgroup = findgroup(frameid, c.groupid);
 		} else if (c.command == "cleargroup") {
 			let group = findgroup(frameid, c.groupid);
 			group.primitives.forEach(p => p.deleted = true);
-			if (!group.frozen) { group.nextupdate = 0; }
+			if (!group.frozen) group.nextupdate = 0;
 		} else if (c.command == "setgroupzindex") {
 			let group = findgroup(frameid, c.groupid);
 			group.zindex = c.zindex;
@@ -77,18 +97,22 @@ function parseCommands(frameid: number, commands: OverlayCommand[]) {
 		}
 	}
 
+	framestate.currentgroup = currentgroup;
 	redraw(now);
 }
 
 function cleanGroup(g: OverlayGroup, now: number) {
 	const bonustime = (!g.frozen ? 0 : 10 * 1000);
 	let endtime = now - bonustime;
-	g.primitives = g.primitives.filter(p => (!p.deleted || g.frozen) && p.endtime > endtime);
+	g.primitives = g.primitives.filter(p => (!p.deleted || g.frozen) && p.endtime >= endtime);
 	//elements created during freeze
 	let nextupdate = Infinity;
 	for (let prim of g.primitives) {
 		if (!g.frozen) { prim.visible = true; }
 		nextupdate = Math.min(nextupdate, prim.endtime + bonustime);
+	}
+	if (!isFinite(nextupdate) && g.primitives.some(p => !p.deleted && p.visible)) {
+		nextupdate = now + 250;
 	}
 	g.nextupdate = nextupdate;
 }
@@ -123,23 +147,43 @@ function redraw(now: number, force = false) {
 	}
 
 	//remove obsolete groups
-	groupstates = groupstates.filter(q => q.primitives.length != 0 || q.frozen || q.zindex != 0);
+	//groupstates = groupstates.filter(q => q.primitives.length != 0 || q.frozen || q.zindex != 0);
 
 	let drawcount = 0;
 	if (force || currentnextupdate <= now) {
-		cnv.width = cnv.clientWidth;
-		cnv.height = cnv.clientHeight;
+		ctx.setTransform(1, 0, 0, 1, 0, 0);
+		ctx.clearRect(0, 0, cnv.width, cnv.height);
 		//js uses center of pixel definition
 		ctx.translate(0.5, 0.5);
 
 		for (let g of groupstates) {
-			for (let prim of g.primitives) {
+			const prims = g.primitives.slice();
+			const pri = (t: string) => {
+				switch (t) {
+					case "sprite": return 0;
+					case "rect":   return 1;
+					case "line":   return 2;
+					case "text":   return 3;
+					default:	   return 1;
+				}
+			};
+
+			prims.sort((a, b) => {
+				const pa = pri(a.action.type);
+				const pb = pri(b.action.type);
+				if (pa !== pb) return pa - pb;
+				return g.primitives.indexOf(a) - g.primitives.indexOf(b);
+			});
+
+			for (const prim of prims) {
+				if (prim.deleted) continue;
+				if (!prim.visible) continue;
 				drawcount++;
-				if (!prim.visible) { continue; }
 				let act = prim.action;
 				if (act.type == "line") {
 					ctx.strokeStyle = coltocss(act.color);
 					ctx.lineWidth = act.linewidth;
+					ctx.beginPath();
 					ctx.moveTo(act.x1, act.y1);
 					ctx.lineTo(act.x2, act.y2);
 					ctx.stroke();
@@ -149,7 +193,7 @@ function redraw(now: number, force = false) {
 					ctx.strokeRect(act.x + act.linewidth / 2, act.y + act.linewidth / 2, act.width - act.linewidth, act.height - act.linewidth);
 				} else if (act.type == "text") {
 					ctx.fillStyle = coltocss(act.color);
-					ctx.font = `${act.size}pt ${act.font || "sans-serif"}`;
+					ctx.font = `${act.size}px ${act.font || "sans-serif"}`;
 					ctx.textAlign = act.center ? "center" : "start";
 					ctx.textBaseline = act.center ? "middle" : "top";
 					ctx.fillText(act.text, act.x, act.y);

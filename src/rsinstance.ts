@@ -134,6 +134,19 @@ export class RsInstance extends TypedEmitter<RsInstanceEvents> {
 		console.log(`new rs client tracked with handle: ${this.window.handle}`);
 	}
 
+	closeOverlayFrame(frameid: number) {
+		if (!this.overlayWindow) {
+			console.log("[overlay] closeframe skipped: no overlayWindow", frameid);
+			return;
+		}
+		if (this.overlayWindow.browser.isDestroyed()) {
+			console.log("[overlay] closeframe skipped: overlay browser destroyed", frameid);
+			return;
+		}
+		console.log("[overlay] sending closeframe -> overlay renderer", frameid);
+		this.overlayWindow.browser.webContents.send("closeframe", frameid);
+	}
+
 	@boundMethod
 	close() {
 		rsInstances.splice(rsInstances.indexOf(this), 1);
@@ -141,6 +154,10 @@ export class RsInstance extends TypedEmitter<RsInstanceEvents> {
 		this.window.removeListener("click", this.clientClicked);
 		this.emit("close");
 		console.log(`stopped tracking rs client with handle: ${this.window.handle}`);
+		if (this.overlayWindow?.browser && !this.overlayWindow.browser.isDestroyed()) {
+			this.overlayWindow.browser.close();
+		}
+		this.overlayWindow = null;
 	}
 
 	emitAppEvent<T extends keyof Alt1EventType>(permission: AppPermission | "", type: T, event: Alt1EventType[T]) {

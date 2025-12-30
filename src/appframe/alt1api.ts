@@ -70,7 +70,7 @@ function getRsInfo() {
 		lastRsInfo = info;
 		lastRsInfoTime = Date.now();
 	}
-	
+
 	if (info.error != undefined) {
 		if (String(info.error).includes("no permitted RS Client") || String(info.error).includes("not bound")) {
 			lastRsInfoTime = 0;
@@ -87,18 +87,24 @@ function getRsInfo() {
 
 let boundImage: FlatImageData & { x: number, y: number } | null = null;
 let overlayDebounceCommands: OverlayCommand[] = [];
-let overlayDebounced = false;
+let overlayFlushTimer: NodeJS.Timeout | null = null;
+
 function queueOverlayCommand(command: OverlayCommand) {
-	overlayDebounceCommands.push(command);
-	if (!overlayDebounced) {
-		setImmediate(sendOverlayQueue);
-		overlayDebounced = true;
-	}
+  overlayDebounceCommands.push(command);
+
+  if (!overlayFlushTimer) {
+	overlayFlushTimer = setTimeout(() => {
+	  sendOverlayQueue();
+	  overlayFlushTimer = null;
+	}, 16); // ~1 frame at 60Hz
+  }
 }
+
 function sendOverlayQueue() {
-	ipcRenderer.send("overlay", overlayDebounceCommands)
-	overlayDebounced = false;
-	overlayDebounceCommands = [];
+  if (overlayDebounceCommands.length === 0) return;
+
+  ipcRenderer.send("overlay", overlayDebounceCommands);
+  overlayDebounceCommands = [];
 }
 
 function setTooltip(text: string) {

@@ -155,6 +155,9 @@ export class ManagedWindow {
 
 		this.window.loadFile(path.resolve(__dirname, "appframe/index.html"));
 		this.window.once("close", () => {
+			if (this.appFrameId !== -1) {
+				this.rsClient.closeOverlayFrame(this.window.webContents.id);
+			}
 			managedWindows.splice(managedWindows.indexOf(this), 1);
 			this.windowPin.unpin();
 			fixTooltip();
