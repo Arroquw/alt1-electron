@@ -239,8 +239,7 @@ export function initIpcApi(ipcMain: IpcMain) {
 
 	ipcMain.on("rsbounds", syncwrap((e) => {
 		const client = expectPermittedRsClient(e);
-
-		const cur = screen.getCursorScreenPoint();
+		const cur = native.getCursorScreenPoint?.() ?? screen.getCursorScreenPoint();
 		const r = client.window.getClientBounds();
 
 		// screen -> rs client coords

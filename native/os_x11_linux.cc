@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <thread>
 #include <mutex>
+#include <atomic>
 #include <condition_variable>
 #include <future>
 
@@ -35,6 +36,10 @@ std::thread recordThread;
 bool windowThreadExists = false;
 std::vector<TrackedEvent> trackedEvents;
 size_t rsDepth = 0;
+
+static std::atomic<int32_t> g_lastMouseX{0};
+static std::atomic<int32_t> g_lastMouseY{0};
+static std::atomic<bool> g_hasMousePos{false};
 
 //whether the left mouse button on the physical is down regardless of window focus or message pump status
 bool isLeftMouseDown = false;
@@ -75,6 +80,25 @@ JSRectangle OSWindow::GetClientBounds() {
 	free(geometry);
 	free(translation);
 	return JSRectangle(x, y, w, h);
+}
+
+JSPoint OSGetCursorScreenPoint() {
+  // Prefer the record-thread-derived position (works even when Electron windows never see the cursor)
+  if (g_hasMousePos.load(std::memory_order_relaxed)) {
+	return JSPoint(
+	  (int32_t)g_lastMouseX.load(std::memory_order_relaxed),
+	  (int32_t)g_lastMouseY.load(std::memory_order_relaxed)
+	);
+  }
+
+  // Fallback: query pointer on root (in case record thread not running yet)
+  ensureConnection();
+  auto cookie = xcb_query_pointer(connection, rootWindow);
+  xcb_query_pointer_reply_t* reply = xcb_query_pointer_reply(connection, cookie, NULL);
+  if (!reply) return JSPoint(0, 0);
+  JSPoint p(reply->root_x, reply->root_y);
+  free(reply);
+  return p;
 }
 
 bool OSWindow::IsValid() {
@@ -673,6 +697,9 @@ void RecordThread() {
 					case XCB_MOTION_NOTIFY: {
 						// std::cout << "motion notify" << std::endl;
 						xcb_motion_notify_event_t* event = (xcb_motion_notify_event_t*)ev;
+						g_lastMouseX.store(event->root_x, std::memory_order_relaxed);
+						g_lastMouseY.store(event->root_y, std::memory_order_relaxed);
+						g_hasMousePos.store(true, std::memory_order_relaxed);
 						int16_t move_x = event->root_x;
 						int16_t move_y = event->root_y;
 						JSPoint point = JSPoint(move_x, move_y);

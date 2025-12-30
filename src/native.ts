@@ -18,6 +18,7 @@ export var native: {
 	setWindowParent: (wnd: BigInt, parent: BigInt) => void,
 	getMouseState: () => boolean,
 	setWindowShape: (wnd: BigInt, rects: Rectangle[]) => void,
+	getCursorScreenPoint: () => { x: number, y: number };
 
 	newWindowListener: <T extends keyof windowEvents>(wnd: BigInt, type: T, cb: windowEvents[T]) => void,
 	removeWindowListener: <T extends keyof windowEvents>(wnd: BigInt, type: T, cb: windowEvents[T]) => void,

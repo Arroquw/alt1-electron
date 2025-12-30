@@ -3,13 +3,13 @@
 #include "../libs/Alt1Native.h"
 
 
-const std::map<CaptureMode, std::string> captureModeText = {
+inline const std::map<CaptureMode, std::string> captureModeText = {
 	{CaptureMode::Desktop,"desktop"},
 	{CaptureMode::Window,"window"},
 	{CaptureMode::OpenGL,"opengl"}
 };
 
-std::map<OSWindow, Alt1Native::HookedProcess*> hookedWindows;
+inline std::map<OSWindow, Alt1Native::HookedProcess*> hookedWindows;
 
 Napi::Value HookWindow(const Napi::CallbackInfo& info) {
 #ifdef OPENGL_SUPPORTED
@@ -74,6 +74,16 @@ Napi::Value GetRsHandles(const Napi::CallbackInfo& info) {
 	auto ret = Napi::Array::New(info.Env(), handles.size());
 	for (size_t i = 0; i < handles.size(); i++) { ret.Set(i, handles[i].ToJS(info.Env())); }
 	return ret;
+}
+
+Napi::Value GetCursorScreenPoint(const Napi::CallbackInfo& info) {
+	auto env = info.Env();
+	JSPoint p = OSGetCursorScreenPoint();
+
+	auto out = Napi::Object::New(env);
+	out.Set("x", Napi::Number::New(env, p.x));
+	out.Set("y", Napi::Number::New(env, p.y));
+	return out;
 }
 
 Napi::Value JSGetActiveWindow(const Napi::CallbackInfo& info) { return OSGetActiveWindow().ToJS(info.Env()); }

@@ -115,12 +115,15 @@ export class RsInstance extends TypedEmitter<RsInstanceEvents> {
 	activeRightclick: ActiveRightclick | null = null;
 	isActive = false;
 	lastActiveTime = 0;
+	lastMouseScreen: { x: number, y: number } | null = null;
+	lastMouseClient: { x: number, y: number } | null = null;
 
 	constructor(rswindow: OSWindow) {
 		super();
 		this.window = rswindow;
 		this.window.on("close", this.close);
 		this.window.on("click", this.clientClicked);
+		this.window.on("mousemove", this.onMouseMove);
 		this.overlayWindow = null;
 
 		for (let app of settings.bookmarks) {
@@ -152,6 +155,7 @@ export class RsInstance extends TypedEmitter<RsInstanceEvents> {
 		rsInstances.splice(rsInstances.indexOf(this), 1);
 		this.window.removeListener("close", this.close);
 		this.window.removeListener("click", this.clientClicked);
+		this.window.removeListener("mousemove", this.onMouseMove);
 		this.emit("close");
 		console.log(`stopped tracking rs client with handle: ${this.window.handle}`);
 		if (this.overlayWindow?.browser && !this.overlayWindow.browser.isDestroyed()) {
@@ -176,14 +180,29 @@ export class RsInstance extends TypedEmitter<RsInstanceEvents> {
 		if (!native.getMouseState()) {
 			//need to wait for 2 frames to get rendered (doublebuffered)
 			await delay(2 * 50);
-			let mousescreen = electron.screen.getCursorScreenPoint();
-			let mousepos = this.screenToClient(mousescreen);
-			let captrect = new Rect(mousepos.x - 300, mousepos.y - 300, 600, 600);
+
+			const mousescreen =
+				this.lastMouseScreen ??
+				this.overlayWindow?.pin?.getMousePos() ??
+				electron.screen.getCursorScreenPoint();
+
+			const mousepos = this.screenToClient(mousescreen);
+
+			const captrect = new Rect(mousepos.x - 300, mousepos.y - 300, 600, 600);
 			captrect.intersect({ x: 0, y: 0, ...this.getClientSize() });
+
+			// Guard 0 size captures
 			if (captrect.width <= 0 || captrect.height <= 0) {
 				console.log("tried to capture 0 size area around mouse click");
 				return;
 			}
+
+			// Make sure click is inside client bounds
+			if (!captrect.containsPoint(mousepos.x, mousepos.y)) {
+				console.log("click outside client");
+				return;
+			}
+
 			let capt = this.capture(captrect);
 			let reader = new RightClickReader();
 			let img = new ImgRefData(capt, 0, 0);
@@ -201,6 +220,13 @@ export class RsInstance extends TypedEmitter<RsInstanceEvents> {
 				});
 			}
 		}
+	}
+
+	@boundMethod
+	onMouseMove(pos: { x: number, y: number }) {
+		// pos should be screen coords coming from native
+		this.lastMouseScreen = pos;
+		this.lastMouseClient = this.screenToClient(pos);
 	}
 
 	setActive(active: boolean) {
@@ -238,18 +264,29 @@ export class RsInstance extends TypedEmitter<RsInstanceEvents> {
 	}
 
 	alt1Pressed() {
-		// let mousescreen =
-		let mousescreen = electron.screen.getCursorScreenPoint();
-		let mousepos = this.screenToClient(mousescreen);
-		console.log("ALT1PRESS", Date.now(), "handle", this.window.handle);
-		console.log("MOUSESCREEN: ", mousescreen);
-		console.log("MOUSEPOS: ", mousepos);
+		const mousescreen =
+			this.lastMouseScreen ??
+			this.overlayWindow?.pin?.getMousePos() ??
+			electron.screen.getCursorScreenPoint();
 
-		let captrect = new Rect(mousepos.x - 300, mousepos.y - 300, 600, 600);
+		const mousepos = this.screenToClient(mousescreen);
+
+		console.log("ALT1PRESS", Date.now(), "handle", this.window.handle);
+		console.log("MOUSESCREEN:", mousescreen);
+		console.log("MOUSEPOS:", mousepos);
+
+		// Build capture rect centered on cursor, clamp to client bounds
+		const captrect = new Rect(mousepos.x - 300, mousepos.y - 300, 600, 600);
 		captrect.intersect({ x: 0, y: 0, ...this.getClientSize() });
-		if (!captrect.containsPoint(mousepos.x, mousepos.y)) { throw new Error("alt+1 pressed outside client"); }
-		let img = this.capture(captrect);
-		let res = readAnything(img, mousepos.x - captrect.x, mousepos.y - captrect.y);
+
+		// If the press is outside the client, don't capture.
+		if (!captrect.containsPoint(mousepos.x, mousepos.y)) {
+			console.log("alt+1 pressed outside client");
+			return;
+		}
+
+		const img = this.capture(captrect);
+		const res = readAnything(img, mousepos.x - captrect.x, mousepos.y - captrect.y);
 		if (res?.type == "text") {
 			let str = res.line.text;
 			console.log("text " + res.font + ": " + str);

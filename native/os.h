@@ -80,6 +80,11 @@ void OSCaptureMulti(OSWindow wnd, CaptureMode mode, vector<CaptureRect> rects, N
 OSWindow OSGetActiveWindow();
 
 /**
+ * Get the current cursor position in screen coordinates.
+ */
+JSPoint OSGetCursorScreenPoint();
+
+/**
  * Returns true when the left/main mouse button is down, even in another process and regardless of message pump state
  */
 bool OSGetMouseState();
