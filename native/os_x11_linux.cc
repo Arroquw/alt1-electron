@@ -5,6 +5,7 @@
 #include <xcb/composite.h>
 #include <xcb/record.h>
 #include <xcb/shape.h>
+#include <stdint.h>
 #include <algorithm>
 #include <thread>
 #include <mutex>
@@ -29,6 +30,9 @@ struct TrackedEvent {
 		callback(Napi::ThreadSafeFunction::New(callback.Env(), callback, "event", 0, 1, [](Napi::Env) {})),
 		callbackRef(Napi::Persistent(callback)) {}
 };
+
+struct WindowState { int16_t x, y; uint16_t w, h; };
+std::map<xcb_window_t, WindowState> windowCache;
 
 std::thread windowThread;
 std::thread recordThread;
@@ -445,13 +449,45 @@ void WindowThread() {
 			switch (type) {
 				case 0: {
 					xcb_generic_error_t* error = (xcb_generic_error_t*)event;
-					std::cout << "native: error: code " << (int)error->error_code << "; " << (int)error->major_code << "." << (int)error->minor_code << std::endl;
+					if (error->error_code != 3) {
+						std::cout << "native: error: code " << (int)error->error_code << "; " << (int)error->major_code << "." << (int)error->minor_code << std::endl;
+					}
 					break;
 				}
 				case XCB_CONFIGURE_NOTIFY: {
 					xcb_configure_notify_event_t* configure = (xcb_configure_notify_event_t*)event;
 					xcb_window_t window = configure->window;
-					JSRectangle bounds = JSRectangle(configure->x, configure->y, configure->width, configure->height);
+
+					// Translate coordinates to absolute screen space
+					int16_t x = configure->x;
+					int16_t y = configure->y;
+
+					xcb_translate_coordinates_cookie_t cookie =
+						xcb_translate_coordinates(connection, window, rootWindow, 0, 0);
+					xcb_translate_coordinates_reply_t* reply =
+						xcb_translate_coordinates_reply(connection, cookie, NULL);
+
+					if (reply) {
+						x = reply->dst_x;
+						y = reply->dst_y;
+						free(reply);
+					}
+
+					WindowState newState = { x, y, configure->width, configure->height };
+
+					// Check if window actually changed
+					if (windowCache.count(window)) {
+						WindowState& old = windowCache[window];
+						if (old.x == newState.x && old.y == newState.y &&
+							old.w == newState.w && old.h == newState.h) {
+							// Nothing changed (just a focus/raise event), so don't trigger JS
+							break;
+						}
+					}
+					windowCache[window] = newState;
+
+					JSRectangle bounds = JSRectangle(x, y, configure->width, configure->height);
+
 					IterateEvents(
 						[window](const TrackedEvent& e){return e.type == WindowEventType::Move && e.window == window;},
 						[bounds](Napi::Env env, Napi::Function callback){callback.Call({bounds.ToJs(env), Napi::String::New(env, "end")});}
