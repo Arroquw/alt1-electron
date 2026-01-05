@@ -161,7 +161,8 @@
         };
 
         devShells.default = pkgs.mkShell {
-          packages = devDeps ++ electronDeps ++ x11Deps;
+          packages = devDeps ++ electronDeps ++ x11Deps
+            ++ [ pkgs.appimage-run ];
           env = {
             ELECTRON_VERSION =
               pkgs.lib.versions.majorMinor pkgs.electron.version;
