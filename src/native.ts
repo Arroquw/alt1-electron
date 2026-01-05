@@ -5,6 +5,7 @@ import { Rectangle } from "./shared";
 import { boundMethod } from "autobind-decorator";
 import { TypedEmitter } from "./typedemitter";
 import { PinRect } from "./settings";
+import os from "os";
 
 export type CaptureMode = "desktop" | "window" | "opengl";
 
@@ -37,12 +38,27 @@ function findAddon(): string {
 }
 
 function getCachePath(): string {
-	const base = process.env.XDG_CACHE_HOME ?? "/tmp";
+
+	const platform = process.platform;
+	let base: string;
+
+	if (platform === "win32") {
+		base = process.env.LOCALAPPDATA ?? os.tmpdir();
+	} else if (platform === "darwin") {
+		let home = process.env.HOME ?? os.tmpdir();
+		if (home !== os.tmpdir()) {
+			base = path.join(home, "Library", "Caches");
+		} else {
+			base = home
+		}
+	} else {
+		base = process.env.XDG_CACHE_HOME ?? os.tmpdir();
+	}
 
 	const dir = path.join(base, "alt1lite", "addons");
 	fs.mkdirSync(dir, { recursive: true });
 
-	return path.join(dir, `addon - ${process.pid} -${Date.now()}.node`);
+	return path.join(dir, `addon-${Date.now()}.node`);
 }
 
 //(Re)loads the native code, this gives all kinds of mem leaks and other trouble if called more than once, only do so for debugging
