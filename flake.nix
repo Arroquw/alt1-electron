@@ -68,7 +68,7 @@
             npmDeps = pkgs.fetchNpmDeps {
               src = "${finalAttrs.src}";
               packageLock = "${finalAttrs.src}/package-lock.json";
-              hash = "sha256-vH+f8ALYfR5yfF/zYK3dPj0GdwcQP/XHC0WC4994D8c=";
+              hash = "sha256-7MAu8j9ZRbfKeYHObVBTNDwzVIOcGyqk6icGnSQP3QA=";
             };
             makeCacheWritable = true;
             env = {
