@@ -24,6 +24,11 @@
 			"target": [
 				"portable"
 			]
+		},
+		"mac": {
+			"target": [
+				"zip"
+			]
 		}
 	},
 	"scripts": {
@@ -33,7 +38,7 @@
 		"ui": "electron --inspect=9228 ./dist/alt1lite.bundle.js",
 		"native": "npm run nativerelease -- --debug",
 		"nativerelease": "electron-rebuild -f -w alt1lite",
-		"dist": "electron-builder",
+		"dist": "electron-builder -mwl",
 		"install": "npm run native",
 		"postinstall": "electron-builder install-app-deps"
 	},
@@ -41,9 +46,8 @@
 	"license": "GPL-3.0",
 	"devDependencies": {
 		"@electron/asar": "^3.4.1",
-		"@electron/rebuild": "^3.7.2",
 		"@electron/remote": "^2.0.8",
-		"@electron/rebuild": "^3.2.9",
+		"@electron/rebuild": "^3.7.2",
 		"@types/node-fetch": "^2.5.8",
 		"@types/react": "^17.0.0",
 		"@types/react-dom": "^17.0.0",
