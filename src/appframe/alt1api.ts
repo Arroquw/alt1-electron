@@ -191,6 +191,18 @@ var alt1api: Partial<typeof alt1> = {
 	overLayRefreshGroup(groupid) { queueOverlayCommand({ command: "refreshgroup", groupid }); },
 	setTooltip(str) { setTooltip(str); return true; },
 	clearTooltip() { setTooltip(""); },
+	registerStatusDaemon(serverUrl: string, state: string) {
+		return JSON.stringify({
+			state: "",
+			nextRun: 100,
+			alerts: [{ title: "", body: "" }],
+			status: [{ status: "" }],
+		});
+	},
+
+	getStatusDaemonState() {
+		return "";
+	},
 
 	//new API's
 	capture(x, y, width, height) {
