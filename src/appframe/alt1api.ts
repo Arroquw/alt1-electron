@@ -2,7 +2,8 @@
 import type * as alt1types from "alt1";
 import { ipcRenderer } from "electron";
 import { FlatImageData, SyncResponse, OverlayCommand, RsClientState } from "../shared";
-import { decodeImageString } from "alt1";
+import { decodeImageString, unmixColor } from "alt1";
+import { readAnything } from "../readers/alt1reader"
 
 let warningsTriggered: string[] = [];
 function warn(key: string, message: string) {
@@ -92,21 +93,21 @@ let overlayDebounceCommands: OverlayCommand[] = [];
 let overlayFlushTimer: NodeJS.Timeout | null = null;
 
 function queueOverlayCommand(command: OverlayCommand) {
-  overlayDebounceCommands.push(command);
+	overlayDebounceCommands.push(command);
 
-  if (!overlayFlushTimer) {
-	overlayFlushTimer = setTimeout(() => {
-	  sendOverlayQueue();
-	  overlayFlushTimer = null;
-	}, 16); // ~1 frame at 60Hz
-  }
+	if (!overlayFlushTimer) {
+		overlayFlushTimer = setTimeout(() => {
+			sendOverlayQueue();
+			overlayFlushTimer = null;
+		}, 16); // ~1 frame at 60Hz
+	}
 }
 
 function sendOverlayQueue() {
-  if (overlayDebounceCommands.length === 0) return;
+	if (overlayDebounceCommands.length === 0) return;
 
-  ipcRenderer.send("overlay", overlayDebounceCommands);
-  overlayDebounceCommands = [];
+	ipcRenderer.send("overlay", overlayDebounceCommands);
+	overlayDebounceCommands = [];
 }
 
 function setTooltip(text: string) {
@@ -144,6 +145,15 @@ var alt1api: Partial<typeof alt1> = {
 		//TODO double check if this is implemented as error or not
 		if (!boundImage || id != 1) { return ""; }
 		return imagedataToBase64(subImageData(boundImage, x, y, w, h));
+	},
+	bindReadStringEx(id, x, y, args) {
+		if (!boundImage || id != 1) { return ""; }
+		var sprite = new ImageData(boundImage.data, boundImage.width, boundImage.height);
+		//TODO: safe JSON parsing
+		let arg = JSON.parse(args);
+		let colors = unmixColor(arg.colors);
+		let result = readAnything(sprite, x, y, arg.fontname, colors);
+		if (result == null) { return "" } else { return JSON.stringify({ text: result.line.text }); };
 	},
 	overLayLine(color, linewidth, x1, y1, x2, y2, time) {
 		queueOverlayCommand({ command: "draw", time, action: { type: "line", x1, y1, x2, y2, color, linewidth } });
