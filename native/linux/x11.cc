@@ -19,6 +19,9 @@ namespace priv_os_x11 {
 
 	void ensureConnection() {
 		std::lock_guard<std::mutex> lock(conn_mtx);
+		if (g_shuttingDown.load(std::memory_order_acquire)) {
+			return;
+		}
 		if (connection != NULL) {
 			return;
 		}

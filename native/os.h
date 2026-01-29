@@ -115,3 +115,10 @@ void OSRemoveWindowListener(OSWindow wnd, WindowEventType type, Napi::Function c
  * Implemented only on X11 Linux as a replacement for electron's setIgnoreMouseEvents()
  */
 void OSSetWindowShape(OSWindow wnd, vector<JSRectangle> rects);
+
+// Best-effort shutdown for native OS backends (stops threads, releases callbacks)
+#if defined(OS_LINUX)
+void OSShutdownX11();
+#else
+inline void OSShutdownX11() {}
+#endif

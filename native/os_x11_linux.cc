@@ -37,13 +37,19 @@ std::map<xcb_window_t, WindowState> windowCache;
 
 std::thread windowThread;
 std::thread recordThread;
-bool windowThreadExists = false;
 std::vector<TrackedEvent> trackedEvents;
 size_t rsDepth = 0;
 
 static std::atomic<int32_t> g_lastMouseX{0};
 static std::atomic<int32_t> g_lastMouseY{0};
 static std::atomic<bool> g_hasMousePos{false};
+static std::atomic<xcb_connection_t*> g_recordConn{nullptr};
+static std::atomic<bool> g_stopThreads{false};
+static std::atomic<bool> g_windowThreadExists{false};
+
+namespace priv_os_x11 {
+	std::atomic<bool> g_shuttingDown{false};
+}
 
 //whether the left mouse button on the physical is down regardless of window focus or message pump status
 bool isLeftMouseDown = false;
@@ -295,10 +301,12 @@ OSWindow OSGetActiveWindow() {
 
 template<typename F, typename COND>
 void IterateEvents(COND cond, F callback) {
+	if (g_stopThreads.load(std::memory_order_acquire)) return;
 	std::vector<std::future<void>> futures;
 
 	std::unique_lock<std::mutex> eventLock(eventMutex);
 	for (auto& event : trackedEvents) {
+		if (g_stopThreads.load(std::memory_order_acquire)) break;
 		if (cond(event)) {
 			auto promise = std::make_shared<std::promise<void>>();
 			futures.emplace_back(promise->get_future());
@@ -310,9 +318,11 @@ void IterateEvents(COND cond, F callback) {
 		}
 	}
 	eventLock.unlock();
+	if (g_stopThreads.load(std::memory_order_acquire)) return;
 
 	// Wait for all operations to complete
 	for (auto& future : futures) {
+		if (g_stopThreads.load(std::memory_order_acquire)) break;
 		future.wait();
 	}
 }
@@ -346,6 +356,11 @@ bool OSGetMouseState() {
 }
 
 void OSNewWindowListener(OSWindow window, WindowEventType type, Napi::Function callback) {
+	if (g_shuttingDown.load(std::memory_order_acquire) ||
+		g_stopThreads.load(std::memory_order_acquire)) {
+			return;
+		}
+
 	auto event = TrackedEvent(window.handle, type, callback);
 
 	// If this is a new window, request all its events from X server
@@ -363,14 +378,69 @@ void OSNewWindowListener(OSWindow window, WindowEventType type, Napi::Function c
 	StartWindowThread();
 }
 
-void OSRemoveWindowListener(OSWindow window, WindowEventType type, Napi::Function callback) {
+void OSShutdownX11() {
+	// idempotent
+	bool expected = false;
+	if (!g_shuttingDown.compare_exchange_strong(expected, true)) return;
 
+	g_stopThreads.store(true, std::memory_order_release);
+
+	// Wake WindowThread
+	if (auto rc = g_recordConn.exchange(nullptr, std::memory_order_acq_rel)) {
+		xcb_disconnect(rc);
+	}
+	if (connection) {
+		xcb_disconnect(connection);
+		connection = nullptr;
+	}
+
+	// Join threads safely
+	{
+		std::unique_lock<std::mutex> windowThreadLock(windowThreadMutex);
+		if (windowThread.joinable()) windowThread.join();
+		if (recordThread.joinable()) recordThread.join();
+		g_windowThreadExists.store(false, std::memory_order_release);
+	}
+
+	// Clean up event callbacks so TSFN doesn't keep Node alive during teardown
+	{
+		std::unique_lock<std::mutex> eventLock(eventMutex);
+		for (auto& e : trackedEvents) {
+			e.callback.Release();
+			e.callbackRef.Reset();
+		}
+		trackedEvents.clear();
+	}
+}
+
+void OSRemoveWindowListener(OSWindow window, WindowEventType type, Napi::Function callback) {
+	if (g_shuttingDown.load(std::memory_order_acquire) ||
+		g_stopThreads.load(std::memory_order_acquire)) {
+		// Still remove callbacks from trackedEvents so JS stops holding TSFNs
+		std::unique_lock<std::mutex> eventLock(eventMutex);
+		trackedEvents.erase(
+			std::remove_if(trackedEvents.begin(), trackedEvents.end(),
+				[window, type, callback](TrackedEvent& e) {
+					if ((e.window == window.handle) && (e.type == type) &&
+						(Napi::Persistent(callback) == e.callbackRef)) {
+						e.callback.Release();
+					e.callbackRef.Reset();
+					return true;
+						}
+						return false;
+				}),
+				trackedEvents.end()
+		);
+		return;
+	}
 	std::unique_lock<std::mutex> eventLock(eventMutex);
 
 	// If there are no more tracked events for this window, request X server to stop sending any events about it
 	if (window.handle != 0 && std::find_if(trackedEvents.begin(), trackedEvents.end(), [window](TrackedEvent& e) {return e.window == window.handle;}) == trackedEvents.end()) {
 		constexpr uint32_t values[] = { XCB_NONE };
-		xcb_change_window_attributes_checked(connection, window.handle, XCB_CW_EVENT_MASK, values);
+		if (connection) {
+			xcb_change_window_attributes_checked(connection, window.handle, XCB_CW_EVENT_MASK, values);
+		}
 	}
 
 	bool wait = trackedEvents.size() != 0;
@@ -396,25 +466,21 @@ void OSRemoveWindowListener(OSWindow window, WindowEventType type, Napi::Functio
 
 	// If the window thread has nothing left to do, send it a wakeup, then wait for it to exit
 	if (wait) {
-		xcb_disconnect(connection);
-		xcb_flush(connection);
-		windowThread.join();
-		recordThread.join();
-		connection = NULL;
+		OSShutdownX11();
 	}
 }
 
 bool WindowThreadShouldRun() {
+	if (g_stopThreads.load(std::memory_order_acquire)) return false;
 	std::unique_lock<std::mutex> eventLock(eventMutex);
-	bool anyEvents = trackedEvents.size() != 0;
-	return anyEvents;
+	return !trackedEvents.empty();
 }
 
 void StartWindowThread() {
-	// Only start if there isn't already a window thread running
 	std::unique_lock<std::mutex> windowThreadLock(windowThreadMutex);
-	if (!windowThreadExists) {
-		windowThreadExists = true;
+	if (!g_windowThreadExists.load(std::memory_order_acquire)) {
+		g_windowThreadExists.store(true, std::memory_order_release);
+		g_stopThreads.store(false, std::memory_order_release);
 		windowThread = std::thread(WindowThread);
 		recordThread = std::thread(RecordThread);
 	}
@@ -466,7 +532,7 @@ void WindowThread() {
 	xcb_change_window_attributes(connection, rootWindow, XCB_CW_EVENT_MASK, rootValues);
 
 	xcb_generic_event_t* event;
-	while (WindowThreadShouldRun()) {
+	while (!g_stopThreads.load(std::memory_order_acquire) && WindowThreadShouldRun()) {
 		event = xcb_wait_for_event(connection);
 		if (event) {
 			auto type = event->response_type & ~0x80;
@@ -558,7 +624,7 @@ void WindowThread() {
 		}
 	}
 
-	windowThreadExists = false;
+	g_windowThreadExists.store(false, std::memory_order_release);
 	std::cout << "native: window thread exiting" << std::endl;
 }
 
@@ -682,14 +748,17 @@ void RecordThread() {
 		std::cout << "native: couldn't start record thread connection; some features will not work" << std::endl;
 		return;
 	}
+	g_recordConn.store(rec_connection, std::memory_order_release);
 
 	// xcb-record event loop
-	xcb_record_enable_context_cookie_t cookie2 = xcb_record_enable_context(rec_connection, id);
-	while (WindowThreadShouldRun()) {
-		xcb_record_enable_context_reply_t* reply = xcb_record_enable_context_reply(rec_connection, cookie2, NULL);
+	while (!g_stopThreads.load(std::memory_order_acquire) && WindowThreadShouldRun()) {
+		auto cookie2 = xcb_record_enable_context(rec_connection, id);
+		auto* reply = xcb_record_enable_context_reply(rec_connection, cookie2, NULL);
 		if (!reply) {
-			std::cout << "native: error in xcb_record_enable_context_reply" << std::endl;
-			continue;
+			if (!g_stopThreads.load(std::memory_order_acquire)) {
+				std::cout << "native: error in xcb_record_enable_context_reply" << std::endl;
+			}
+			break;
 		}
 		if (reply->client_swapped) {
 			std::cout << "native: unsupported setting client_swapped; please report this error" << std::endl;
@@ -754,9 +823,17 @@ void RecordThread() {
 		if (reply) free(reply);
 	}
 
-	xcb_record_disable_context(rec_connection, id);
-	xcb_record_free_context(rec_connection, id);
-	xcb_flush(rec_connection);
-	xcb_disconnect(rec_connection);
+	xcb_connection_t* expected = rec_connection;
+	const bool stillOwned =
+	g_recordConn.compare_exchange_strong(expected, nullptr, std::memory_order_acq_rel);
+
+	if (stillOwned) {
+		xcb_record_disable_context(rec_connection, id);
+		xcb_record_free_context(rec_connection, id);
+		xcb_flush(rec_connection);
+		xcb_disconnect(rec_connection);
+	} else {
+		// Already disconnected by shutdown path.
+	}
 	std::cout << "native: record thread exiting" << std::endl;
 }

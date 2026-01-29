@@ -133,3 +133,8 @@ void RemoveWindowListener(const Napi::CallbackInfo& info) {
 	}
 	OSRemoveWindowListener(wnd, typefind->second, cb);
 }
+
+Napi::Value Shutdown(const Napi::CallbackInfo& info) {
+	OSShutdownX11();
+	return info.Env().Undefined();
+}
