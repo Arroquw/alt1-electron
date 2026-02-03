@@ -15,15 +15,6 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
 		nullptr
 	);
 
-	napi_env rawEnv = env;
-	napi_add_env_cleanup_hook(
-		rawEnv,
-		[](void*) {
-			OSShutdownX11();
-		},
-		nullptr
-	);
-
 	exports.Set("captureWindowMulti", Napi::Function::New(env, CaptureWindowMulti));
 	exports.Set("getRsHandles", Napi::Function::New(env, GetRsHandles));
 	exports.Set("getWindowBounds", Napi::Function::New(env, GetWindowBounds));
