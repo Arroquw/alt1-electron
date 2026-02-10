@@ -14,8 +14,7 @@ module.exports = {
 		provider: "github",
 		owner,
 		repo,
-		releaseType: "release",
-		releaseName: "Nightly"
+		releaseType: "release"
 	},
 	],
 };
