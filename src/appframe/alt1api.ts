@@ -92,21 +92,21 @@ let overlayDebounceCommands: OverlayCommand[] = [];
 let overlayFlushTimer: NodeJS.Timeout | null = null;
 
 function queueOverlayCommand(command: OverlayCommand) {
-  overlayDebounceCommands.push(command);
+	overlayDebounceCommands.push(command);
 
-  if (!overlayFlushTimer) {
-	overlayFlushTimer = setTimeout(() => {
-	  sendOverlayQueue();
-	  overlayFlushTimer = null;
-	}, 16); // ~1 frame at 60Hz
-  }
+	if (!overlayFlushTimer) {
+		overlayFlushTimer = setTimeout(() => {
+			sendOverlayQueue();
+			overlayFlushTimer = null;
+		}, 16); // ~1 frame at 60Hz
+	}
 }
 
 function sendOverlayQueue() {
-  if (overlayDebounceCommands.length === 0) return;
+	if (overlayDebounceCommands.length === 0) return;
 
-  ipcRenderer.send("overlay", overlayDebounceCommands);
-  overlayDebounceCommands = [];
+	ipcRenderer.send("overlay", overlayDebounceCommands);
+	overlayDebounceCommands = [];
 }
 
 function setTooltip(text: string) {
