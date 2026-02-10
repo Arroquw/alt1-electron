@@ -56,7 +56,7 @@ npm run watch
 ### Debian/Ubuntu (apt)
 
 ```console
-# apt install pkg-config libxcb-dev libxcb-shm-dev libxcb-composite-dev libxcb-ewmh-dev libxcb-record-dev libxcb-shape-dev
+# apt install pkg-config libxcb-shm0-dev libxcb-composite0-dev libxcb-ewmh-dev libxcb-record0-dev libxcb-shape0-dev
 ```
 
 ### Gentoo (portage)

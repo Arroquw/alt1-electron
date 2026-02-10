@@ -1,0 +1,38 @@
+name: Build/release
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v5
+
+      - name: Install dependencies
+        run: sudo apt install pkg-config libxcb-shm0-dev libxcb-composite0-dev libxcb-ewmh-dev libxcb-record0-dev libxcb-shape0-dev
+        if: matrix.os == 'ubuntu-latest'
+
+      - name: Install Node.js, NPM
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Build alt1-electron
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm ci
+          npm run build
+          npx electron-builder -l --publish always --config electron-builder.ci.cjs
