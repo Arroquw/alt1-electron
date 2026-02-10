@@ -40,4 +40,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create nightly --title "Nightly" --latest --notes "Automated build" || true
-          gh release upload nightly release/*.AppImage --clobber
+          gh release upload nightly release/*.AppImage release/latest-linux.yml --clobber
