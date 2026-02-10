@@ -29,10 +29,15 @@ jobs:
         with:
           node-version: 24
 
-      - name: Build alt1-electron
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build (no publish)
         run: |
           npm ci
           npm run build
-          npx electron-builder -l --publish always --config electron-builder.ci.cjs
+          npx electron-builder -l --publish never
+
+      - name: Publish rolling Nightly release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create nightly --title "Nightly" --latest --notes "Automated build" || true
+          gh release upload nightly release/*.AppImage --clobber
