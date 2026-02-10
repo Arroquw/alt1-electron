@@ -24,6 +24,8 @@ export var native: {
 	newWindowListener: <T extends keyof windowEvents>(wnd: BigInt, type: T, cb: windowEvents[T]) => void,
 	removeWindowListener: <T extends keyof windowEvents>(wnd: BigInt, type: T, cb: windowEvents[T]) => void,
 
+	shutdown?: () => void;
+
 	test: (...arg: any) => any
 };
 reloadAddon();
@@ -61,9 +63,14 @@ function getCachePath(): string {
 	return path.join(dir, `addon-${Date.now()}.node`);
 }
 
+export function shutdownAddon() {
+	try { native.shutdown?.(); } catch {}
+}
+
 //(Re)loads the native code, this gives all kinds of mem leaks and other trouble if called more than once, only do so for debugging
 export function reloadAddon() {
 	//TODO fix hardcoded build path
+	try { native?.shutdown?.(); } catch {}
 	const addon_source = process.env.NATIVE_ADDON_PATH ?? findAddon();
 
 	let addon_path = addon_source;

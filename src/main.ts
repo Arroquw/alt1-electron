@@ -5,7 +5,7 @@ import { Menu, Tray } from "electron/main";
 import { MenuItemConstructorOptions, nativeImage } from "electron/common";
 import { handleSchemeArgs } from "./schemehandler";
 import { patchImageDataShow, relPath, schemestring } from "./lib";
-import { getActiveWindow, OSWindow, OSWindowPin, reloadAddon } from "./native";
+import { getActiveWindow, OSWindow, OSWindowPin, reloadAddon, shutdownAddon } from "./native";
 import { detectInstances, getRsInstanceFromWnd, RsInstance, rsInstances, initRsInstanceTracking, stopRsInstanceTracking } from "./rsinstance";
 import { AppPermission, Bookmark, settings } from "./settings";
 import { boundMethod } from "autobind-decorator";
@@ -60,6 +60,7 @@ settings.on("changed", () => {
 remoteMain.initialize();
 
 app.on("before-quit", e => {
+	shutdownAddon();
 	rsInstances.forEach(c => c.close());
 	stopRsInstanceTracking();
 	settings.save();

@@ -1,11 +1,19 @@
-
-
 #include "jsapi.h"
 
+static void FinalizePluginInstance(Napi::Env /*env*/, PluginInstance* data) {
+	delete data;
+}
+
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
-	auto inst = new PluginInstance();
-	//TODO need delete destructor to get rid of the mem again?
-	env.SetInstanceData<>(inst);
+	auto* inst = new PluginInstance();
+
+	env.SetInstanceData<PluginInstance, FinalizePluginInstance>(inst);
+
+	napi_add_env_cleanup_hook(
+		env,
+		[](void*) { OSShutdownX11(); },
+		nullptr
+	);
 
 	exports.Set("captureWindowMulti", Napi::Function::New(env, CaptureWindowMulti));
 	exports.Set("getRsHandles", Napi::Function::New(env, GetRsHandles));
@@ -20,6 +28,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
 
 	exports.Set("newWindowListener", Napi::Function::New(env, NewWindowListener));
 	exports.Set("removeWindowListener", Napi::Function::New(env, RemoveWindowListener));
+	exports.Set("shutdown", Napi::Function::New(env, Shutdown));
 	return exports;
 }
 
