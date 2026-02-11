@@ -1,5 +1,5 @@
 import { ipcRenderer } from "electron/renderer";
-import type { OverlayCommand, OverlayPrimitive } from "src/shared";
+import { OverlayCommand, OverlayPrimitive, imageDataFrom } from "../shared";
 
 import "./index.html";
 
@@ -195,7 +195,7 @@ function redraw(now: number, force = false) {
 				} else if (act.type == "sprite") {
 					// Check if width and height are valid positive numbers before drawing
 					if (act.sprite.width > 0 && act.sprite.height > 0) {
-						const imageData = new ImageData(act.sprite.data, act.sprite.width, act.sprite.height);
+						const imageData = imageDataFrom(act.sprite.data, act.sprite.width, act.sprite.height);
 						ctx.putImageData(imageData, act.x, act.y);
 					}
 				}
