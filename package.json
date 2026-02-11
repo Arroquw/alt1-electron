@@ -65,9 +65,9 @@
 			"output": "release"
 		},
 		"linux": {
-			"target": [
-				"AppImage"
-			]
+			"target": ["AppImage"],
+			"icon": "src/imgs/alt1icon_large.png",
+			"category": "Utility"
 		},
 		"win": {
 			"target": [
