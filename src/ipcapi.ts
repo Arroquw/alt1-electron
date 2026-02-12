@@ -6,7 +6,7 @@ import { admins, fixTooltip, getManagedAppWindow, ManagedWindow, openApp } from 
 import { native } from "./native";
 import { settings } from "./settings";
 import { FlatImageData, OverlayCommand, Rectangle, RsClientState } from "./shared";
-import { rsInstances } from "./rsinstance";
+import { getRsInstanceFromWnd, rsInstances } from "./rsinstance";
 
 const snapdistance = 10;
 const snapcornerlength = 30;
@@ -248,8 +248,8 @@ export function initIpcApi(ipcMain: IpcMain) {
 
 		const mousePosition =
 			(mx >= 0 && my >= 0 && mx < r.width && my < r.height)
-			  ? (((mx & 0xFFFF) << 16) | (my & 0xFFFF))
-			  : -1;
+				? (((mx & 0xFFFF) << 16) | (my & 0xFFFF))
+				: -1;
 
 		const state: RsClientState = {
 			active: client.isActive,
@@ -261,7 +261,7 @@ export function initIpcApi(ipcMain: IpcMain) {
 			mousePosition,
 		};
 
-	  e.returnValue = { value: state };
+		e.returnValue = { value: state };
 	}));
 
 	ipcMain.handle("capture", (e: any, x: any, y: any, width: any, height: any) => {
@@ -299,6 +299,18 @@ export function initIpcApi(ipcMain: IpcMain) {
 		native.setWindowShape(wnd, rects);
 	}));
 
+	ipcMain.on("daemonrun", (event, result) => {
+		const wnd = expectAppWindow(event);
+		let rsinst = wnd.rsClient;
+		if (rsinst) {
+			try {
+				rsinst.runDaemon(result);
+			} catch (e) {
+				console.error("Failed to run daemon on Main side:", e);
+			}
+		}
+	})
+
 	ipcMain.handle("openapp", async (e, url) => {
 		if (isAdmin(e)) {
 			let app = settings.bookmarks.find(a => a.configUrl == url);
@@ -317,15 +329,15 @@ export function initIpcApi(ipcMain: IpcMain) {
 	});
 
 	ipcMain.handle("installapp_preview", async (e, input: string) => {
-	  if (isAdmin(e)) {
-		return await settings.appconfig.previewInstall(input);
-	  }
+		if (isAdmin(e)) {
+			return await settings.appconfig.previewInstall(input);
+		}
 	});
 
 	ipcMain.handle("installapp_confirm", async (e, normalizedUrl: string) => {
-	  if (isAdmin(e)) {
-		return await settings.appconfig.confirmInstall(normalizedUrl);
-	  }
+		if (isAdmin(e)) {
+			return await settings.appconfig.confirmInstall(normalizedUrl);
+		}
 	});
 
 	ipcMain.handle("getsettings", (e) => {
