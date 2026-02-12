@@ -33,3 +33,32 @@ type CommandRefreshGroup = CommandBase & { command: "refreshgroup", groupid: str
 type CommandSetgroupZindex = CommandBase & { command: "setgroupzindex", groupid: string, zindex: number };
 
 export type OverlayCommand = CommandDraw | CommandSetGroup | CommandClearGroup | CommandFreezeGroup | CommandContinueGroup | CommandRefreshGroup | CommandSetgroupZindex;
+
+export function imageDataFrom(
+	src: ArrayBufferView,
+	w: number,
+	h: number
+): ImageData {
+	// Normalize to Uint8ClampedArray (usually zero-copy)
+	const clamped =
+	src instanceof Uint8ClampedArray
+	? src
+	: new Uint8ClampedArray(src.buffer, src.byteOffset, src.byteLength);
+
+	// RGBA = 4 bytes per pixel
+	const expected = w * h * 4;
+	if (clamped.byteLength !== expected) {
+		console.warn(
+			`imageDataFrom: unexpected byteLength (got ${clamped.byteLength}, expected ${expected}) for ${w}x${h}`
+		);
+	}
+
+	// ImageData requires ArrayBuffer-backed data in newer DOM typings
+	const buf = clamped.buffer;
+	const data =
+	buf instanceof ArrayBuffer
+	? new Uint8ClampedArray(buf, clamped.byteOffset, clamped.byteLength)
+	: new Uint8ClampedArray(clamped); // copy if SharedArrayBuffer-backed
+
+	return new ImageData(data, w, h);
+}

@@ -44,7 +44,7 @@
 	"devDependencies": {
 		"electron": "^35.5.1",
 		"electron-builder": "^26.0.12",
-		"@electron/rebuild": "^3.7.2",
+		"@electron/rebuild": "^4.0.3",
 		"@electron/asar": "^3.4.1",
 		"@electron/remote": "^2.0.8",
 		"ts-loader": "^8.0.14",

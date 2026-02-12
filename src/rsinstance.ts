@@ -3,7 +3,7 @@ import * as electron from "electron";
 import * as path from "path";
 import { delay } from "./lib";
 import { OSWindow, native, OSWindowPin, OSNullWindow } from "./native";
-import { OverlayCommand } from "./shared";
+import { OverlayCommand, imageDataFrom } from "./shared";
 import { TypedEmitter } from "./typedemitter";
 import { boundMethod } from "autobind-decorator";
 import { AppPermission, settings } from "./settings";
@@ -260,7 +260,7 @@ export class RsInstance extends TypedEmitter<RsInstanceEvents> {
 
 	capture(rect: RectLike) {
 		let capt = native.captureWindowMulti(this.window.handle, settings.captureMode, { main: rect });
-		return new ImageData(capt.main, rect.width, rect.height);
+		return imageDataFrom(capt.main, rect.width, rect.height);
 	}
 
 	alt1Pressed() {
