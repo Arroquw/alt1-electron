@@ -250,7 +250,7 @@ var alt1api: Partial<typeof alt1> = {
 
 		daemon.url = serverUrl;
 		daemon.state = state ?? "";
-		daemon.lastDelay = 20_000;
+		daemon.lastDelay = 48_000;
 
 		runDaemon();
 	},
