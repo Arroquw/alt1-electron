@@ -1,22 +1,35 @@
-//figure this one out for jsx
+/// <reference path="../types/preload.d.ts" />
 import * as React from "react";
 import { useState, useLayoutEffect, useRef } from "react";
 import { render } from "react-dom";
-import { ipcRenderer, WebContents } from "electron";
-import * as remote from "@electron/remote";
+import type { WebContents } from "electron";
 import type { RectLike } from "alt1";
 import classnames from "classnames";
 
 import "./style.scss";
 import "./index.html";
+
+if (!window.electronRemote || !window.electronIPC) {
+	throw new Error("Preload script not loaded!");
+}
+
+const remote = window.electronRemote;
+const ipcRenderer = window.electronIPC;
 (window as any).remote = remote;
-var appview: Electron.WebviewTag | null = null;
-var appcontents: WebContents | null = null;
-var mainmodule = remote.getGlobal("Alt1lite") as typeof import("../main");
-//TODO backup if this fails
-var thiswindow = mainmodule.getManagedWindow(remote.getCurrentWebContents())!;
+
+let appview: Electron.WebviewTag | null = null;
+let appcontents: WebContents | null = null;
+let thiswindow: any = null;
 
 window.addEventListener("DOMContentLoaded", () => {
+	thiswindow = remote.getManagedWindow();
+
+	if (!thiswindow) {
+		console.error("Failed to get managed window");
+		document.body.innerHTML = "<h1>Error: Managed window not found</h1>";
+		return;
+	}
+
 	render(<AppFrame />, document.getElementById("root"));
 });
 
@@ -31,40 +44,32 @@ function AppFrame(p: {}) {
 	useLayoutEffect(() => {
 		let view = document.createElement("webview");
 		view.className = "appframe";
-		view.preload = new URL("./alt1api.bundle.js", window.location.href).pathname;
+		view.preload = new URL("./preload.bundle.js", window.location.href).pathname;
 		view.allowpopups = true;
 		view.nodeintegration = false;
 		view.nodeintegrationinsubframes = false;
 		view.src = thiswindow.appConfig.appUrl;
-		//view.webpreferences = "sandbox,contextIsolation=true";
-		view.webpreferences = "sandbox,contextIsolation=false";
+		view.webpreferences = "sandbox,contextIsolation=true";
+
 		gridel.current!.appendChild(view);
 		view.addEventListener("dom-ready", () => {
-			//TODO is there a better way to get a ref to the frame?
 			thiswindow.appFrameId = view.getWebContentsId();
 			appcontents = remote.webContents.fromId(appview!.getWebContentsId()) ?? null;
 		});
 
 		appview = view;
-		//setparent doesnt work as expected
-		// view.addEventListener("devtools-opened", e => {
-		// 	let devwnd = (appcontents!.devToolsWebContents as any).getOwnerBrowserWindow();
-		// 	let selfwnd = remote.getCurrentWindow();
-		// 	if (devwnd && selfwnd) { devwnd.setParentWindow(selfwnd); }
-		// });
 		(window as any).view = view;
 		return () => { appview = null };
 	}, []);
 
-	//rightclick even listener
+	//rightclick event listener
 	useLayoutEffect(() => {
-		let handler = (e: any, rect: RectLike | null) => setRightclickArea(rect);
+		let handler = (rect: RectLike | null) => setRightclickArea(rect);
 		ipcRenderer.on("rightclick", handler);
 		return () => { ipcRenderer.off("rightclick", handler); };
 	}, []);
 
 	//transparent window clickthrough handler
-	//https://github.com/electron/electron/issues/1335
 	useLayoutEffect(clickThroughEffect.bind(null, minimized, rightclickArea, rootref.current, buttonroot.current, gridel.current),
 		[minimized, rightclickArea, rootref.current, buttonroot.current, gridel.current]);
 
