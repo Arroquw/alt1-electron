@@ -109,6 +109,7 @@ module.exports = (env = {}) => {
 			context: path.resolve(__dirname, "./src/"),
 			entry: {
 				"appframe/preload": "./appframe/preload.ts",
+				"appframe/alt1api": "./appframe/alt1api.ts",
 			},
 			output,
 			externals: externalsAll,
@@ -118,7 +119,7 @@ module.exports = (env = {}) => {
 			...common,
 			mode,
 			devtool,
-			target: "electron-renderer",
+			target: "web",
 			context: path.resolve(__dirname, "./src/"),
 			entry: {
 				"appframe/index": "./appframe/index.tsx",

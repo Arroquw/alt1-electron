@@ -1,8 +1,22 @@
 import { contextBridge, ipcRenderer } from "electron";
-import * as remote from "@electron/remote";
 import { FlatImageData, SyncResponse, OverlayCommand, RsClientState } from "../shared";
 import { decodeImageString } from "alt1";
 import type * as alt1types from "alt1";
+
+// Check if we're in the main appframe or in a webview
+// Webviews can't access @electron/remote
+const isWebview = !window.location.href.includes('appframe/index.html');
+
+let remote: any = null;
+if (!isWebview) {
+	// Only import remote for the appframe, not for webviews
+	remote = require("@electron/remote");
+}
+
+
+const getMainModule = () => {
+	return remote.getGlobal("Alt1lite");
+};
 
 let warningsTriggered: string[] = [];
 function warn(key: string, message: string) {
@@ -12,12 +26,6 @@ function warn(key: string, message: string) {
 	}
 }
 
-// Get the main module
-const getMainModule = () => {
-	return remote.getGlobal("Alt1lite");
-};
-
-// Event handling setup
 const eventHandlers: { [K in keyof alt1types.Alt1EventType]?: Array<(event: alt1types.Alt1EventType[K]) => void> } = {};
 
 ipcRenderer.on("appevent", <T extends keyof alt1types.Alt1EventType>(e: any, type: T, appevent: alt1types.Alt1EventType[T]) => {
@@ -61,27 +69,6 @@ function imagedataToBase64(img: FlatImageData) {
 	return str;
 }
 
-let lastRsInfo: SyncResponse<RsClientState> = null!;
-let lastRsInfoTime = 0;
-function getRsInfo() {
-	let info = lastRsInfo;
-	if (lastRsInfoTime < Date.now() - 100) {
-		info = ipcRenderer.sendSync("rsbounds");
-		lastRsInfo = info;
-		lastRsInfoTime = Date.now();
-	}
-	if (info.error != undefined) {
-		if (String(info.error).includes("no permitted RS Client") || String(info.error).includes("not bound")) {
-			lastRsInfoTime = 0;
-			let retry = ipcRenderer.sendSync("rsbounds");
-			lastRsInfo = retry;
-			lastRsInfoTime = Date.now();
-			if (retry.error == undefined) return retry.value;
-		}
-		throw new Error(info.error);
-	}
-	return info.value;
-}
 
 let boundImage: FlatImageData & { x: number, y: number } | null = null;
 let overlayDebounceCommands: OverlayCommand[] = [];
@@ -121,69 +108,7 @@ function subImageData(img: FlatImageData, x: number, y: number, w: number, h: nu
 	return { data: newdata, width: w, height: h } as FlatImageData;
 }
 
-// Expose electronRemote API
-contextBridge.exposeInMainWorld("electronRemote", {
-	getCurrentWebContents: () => remote.getCurrentWebContents(),
-	getCurrentWindow: () => remote.getCurrentWindow(),
-	getGlobal: (name: string) => remote.getGlobal(name),
-	webContents: {
-		fromId: (id: number) => remote.webContents.fromId(id),
-		isDevToolsOpened: (id: number) => {
-			const wc = remote.webContents.fromId(id);
-			return wc ? wc.isDevToolsOpened() : false;
-		},
-		openDevTools: (id: number, options?: any) => {
-			const wc = remote.webContents.fromId(id);
-			if (wc) wc.openDevTools(options);
-		},
-		closeDevTools: (id: number) => {
-			const wc = remote.webContents.fromId(id);
-			if (wc) wc.closeDevTools();
-		}
-	},
-	getManagedWindow: () => {
-		const mod = getMainModule();
-		if (!mod || !mod.getManagedWindow) {
-			return null;
-		}
-		return mod.getManagedWindow(remote.getCurrentWebContents());
-	}
-});
-
-contextBridge.exposeInMainWorld("electronIPC", {
-	send: (channel: string, ...args: any[]) => ipcRenderer.send(channel, ...args),
-	sendSync: (channel: string, ...args: any[]) => ipcRenderer.sendSync(channel, ...args),
-	invoke: (channel: string, ...args: any[]) => ipcRenderer.invoke(channel, ...args),
-	on: (channel: string, listener: (...args: any[]) => void) => {
-		ipcRenderer.on(channel, (event, ...args) => listener(...args));
-	},
-	off: (channel: string, listener: (...args: any[]) => void) => {
-		ipcRenderer.removeListener(channel, listener);
-	}
-});
-
-// Expose alt1 API
-contextBridge.exposeInMainWorld("alt1", {
-	events: eventHandlers,
-
-	get rsX() { return getRsInfo().clientRect.x; },
-	get rsY() { return getRsInfo().clientRect.y; },
-	get rsWidth() { return getRsInfo().clientRect.width; },
-	get rsHeight() { return getRsInfo().clientRect.height; },
-	get rsActive() { return getRsInfo().active; },
-	get rsLastActive() { return Date.now() - getRsInfo().lastActiveTime; },
-	get rsPing() { return getRsInfo().ping; },
-	get rsScaling() { return getRsInfo().scaling; },
-	get rsLinked() { return true; },
-	get captureMethod() { return getRsInfo().captureMode; },
-	get mousePosition() { return getRsInfo().mousePosition; },
-	get currentWorld() { return 1; },
-	get lastWorldHop() { return 0; },
-	get permissionGameState() { return true; },
-	get permissionInstalled() { return true; },
-	get permissionOverlay() { return true; },
-	get permissionPixel() { return true; },
-
+var alt1API: Partial<typeof alt1> = {
 	identifyAppUrl: (url: string) => ipcRenderer.send("identifyapp", url),
 	captureInterval: 100,
 	maxtransfer: 100e6,
@@ -192,7 +117,10 @@ contextBridge.exposeInMainWorld("alt1", {
 	version: "1.3.0",
 	versionint: 1003000,
 
-	openBrowser: (url: string) => { window.open(url, "_blank"); return true; },
+	openBrowser: (url: string) => {
+		window.open(url, "_blank");
+		return true;
+	},
 	getRegion: (x: number, y: number, w: number, h: number) => {
 		let img = captureSync(x, y, w, h);
 		return imagedataToBase64(img);
@@ -279,7 +207,48 @@ contextBridge.exposeInMainWorld("alt1", {
 	closeApp() {
 		window.close();
 	},
-	userResize(left: number, top: number, right: number, bot: number) {
+	userResize(left: boolean, top: boolean, right: boolean, bot: boolean) {
 		ipcRenderer.sendSync("dragwindow", left, top, right, bot);
+	}
+};
+
+contextBridge.exposeInMainWorld("alt1Internal", alt1API);
+contextBridge.exposeInMainWorld("electronRemote", {
+	getCurrentWebContents: () => remote.getCurrentWebContents(),
+	getCurrentWindow: () => remote.getCurrentWindow(),
+	getGlobal: (name: string) => remote.getGlobal(name),
+	webContents: {
+		fromId: (id: number) => remote.webContents.fromId(id),
+		isDevToolsOpened: (id: number) => {
+			const wc = remote.webContents.fromId(id);
+			return wc ? wc.isDevToolsOpened() : false;
+		},
+		openDevTools: (id: number, options?: any) => {
+			const wc = remote.webContents.fromId(id);
+			if (wc) wc.openDevTools(options);
+		},
+		closeDevTools: (id: number) => {
+			const wc = remote.webContents.fromId(id);
+			if (wc) wc.closeDevTools();
+		}
+	},
+	getManagedWindow: () => {
+		const mod = getMainModule();
+		if (!mod || !mod.getManagedWindow) {
+			return null;
+		}
+		return mod.getManagedWindow(remote.getCurrentWebContents());
+	}
+});
+
+contextBridge.exposeInMainWorld("electronIPC", {
+	send: (channel: string, ...args: any[]) => ipcRenderer.send(channel, ...args),
+	sendSync: (channel: string, ...args: any[]) => ipcRenderer.sendSync(channel, ...args),
+	invoke: (channel: string, ...args: any[]) => ipcRenderer.invoke(channel, ...args),
+	on: (channel: string, listener: (...args: any[]) => void) => {
+		ipcRenderer.on(channel, (event, ...args) => listener(...args));
+	},
+	off: (channel: string, listener: (...args: any[]) => void) => {
+		ipcRenderer.removeListener(channel, listener);
 	}
 });

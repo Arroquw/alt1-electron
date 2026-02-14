@@ -2,7 +2,6 @@
 import * as React from "react";
 import { useState, useLayoutEffect, useRef } from "react";
 import { render } from "react-dom";
-import type { WebContents } from "electron";
 import type { RectLike } from "alt1";
 import classnames from "classnames";
 
@@ -18,7 +17,6 @@ const ipcRenderer = window.electronIPC;
 (window as any).remote = remote;
 
 let appview: Electron.WebviewTag | null = null;
-let appcontents: WebContents | null = null;
 let thiswindow: any = null;
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -54,7 +52,6 @@ function AppFrame(p: {}) {
 		gridel.current!.appendChild(view);
 		view.addEventListener("dom-ready", () => {
 			thiswindow.appFrameId = view.getWebContentsId();
-			appcontents = remote.webContents.fromId(appview!.getWebContentsId()) ?? null;
 		});
 
 		appview = view;
@@ -97,14 +94,22 @@ function AppFrame(p: {}) {
 
 function toggleDevTools(e: React.MouseEvent) {
 	if (e.button == 0) {
-		if (appcontents) {
-			if (appcontents.isDevToolsOpened()) { appcontents.closeDevTools(); }
-			else { appcontents.openDevTools({ mode: "detach" }); }
+		if (appview) {
+			const webContentsId = appview.getWebContentsId();
+			if (remote.webContents.isDevToolsOpened(webContentsId)) {
+				remote.webContents.closeDevTools(webContentsId);
+			} else {
+				remote.webContents.openDevTools(webContentsId, { mode: "detach" });
+			}
 		}
 	} else if (e.button == 2) {
-		let cnt = remote.getCurrentWebContents()
-		if (cnt.isDevToolsOpened()) { cnt.closeDevTools(); }
-		else { cnt.openDevTools({ mode: "detach" }); }
+		const currentWc = remote.getCurrentWebContents();
+		const currentId = currentWc.id;
+		if (remote.webContents.isDevToolsOpened(currentId)) {
+			remote.webContents.closeDevTools(currentId);
+		} else {
+			remote.webContents.openDevTools(currentId, { mode: "detach" });
+		}
 	}
 }
 
