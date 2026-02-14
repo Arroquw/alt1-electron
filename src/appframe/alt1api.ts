@@ -5,24 +5,25 @@ export const getHydrationScript = (alt1API: any) => {
     return `
         (function() {
             const bridge = window.alt1Internal;
-            if (!bridge) {
-                console.error("Alt1 Error: Internal bridge not found");
-                return;
-            }
+            const ipc = window.electronIPC;
+
+            const alt1 = {
+                events: {},
+            };
 
             let lastRsInfo = null;
             let lastRsInfoTime = 0;
 
             function getRsInfo() {
                 if (lastRsInfoTime < Date.now() - 100) {
-                    lastRsInfo = window.electronIPC.sendSync("rsbounds");
+                    lastRsInfo = ipc.sendSync("rsbounds");
                     lastRsInfoTime = Date.now();
                 }
                 if (lastRsInfo.error) throw new Error(lastRsInfo.error);
                 return lastRsInfo.value;
             }
 
-            const getters = {
+            Object.defineProperties(alt1, {
                 rsX: { get() { return getRsInfo().clientRect.x; } },
                 rsY: { get() { return getRsInfo().clientRect.y; } },
                 rsWidth: { get() { return getRsInfo().clientRect.width; } },
@@ -41,25 +42,17 @@ export const getHydrationScript = (alt1API: any) => {
                 permissionInstalled: { get() { return true; } },
                 permissionOverlay: { get() { return true; } },
                 permissionPixel: { get() { return true; } }
-            };
-
-            window.alt1 = window.alt1 || {};
-            Object.defineProperties(window.alt1, getters);
+            });
 
             Object.keys(bridge).forEach((key) => {
-                const descriptor = Object.getOwnPropertyDescriptor(bridge, key);
-                if (descriptor && (descriptor.get || typeof bridge[key] === 'function')) {
-                    Object.defineProperty(window.alt1, key, {
-                        get: () => bridge[key],
-                        enumerable: true,
-                        configurable: true
-                    });
-                } else {
-                    window.alt1[key] = bridge[key];
+                if (typeof bridge[key] === "function") {
+                    alt1[key] = bridge[key].bind(bridge);
+                } else if (!(key in alt1)) {
+                    alt1[key] = bridge[key];
                 }
             });
 
-            window.alt1.events = {};
+            window.alt1 = alt1;
             console.log("Alt1 hydrated in Webview Main World!");
         })();
     `;
