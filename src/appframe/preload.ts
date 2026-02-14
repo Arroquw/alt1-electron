@@ -1,7 +1,8 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webFrame } from "electron";
 import { FlatImageData, SyncResponse, OverlayCommand, RsClientState } from "../shared";
 import { decodeImageString } from "alt1";
 import type * as alt1types from "alt1";
+import { getHydrationScript } from "./alt1api";
 
 // Check if we're in the main appframe or in a webview
 // Webviews can't access @electron/remote
@@ -252,3 +253,5 @@ contextBridge.exposeInMainWorld("electronIPC", {
 		ipcRenderer.removeListener(channel, listener);
 	}
 });
+
+webFrame.executeJavaScript(getHydrationScript(alt1API));
