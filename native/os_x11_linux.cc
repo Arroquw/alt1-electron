@@ -11,7 +11,9 @@
 #include <mutex>
 #include <atomic>
 #include <condition_variable>
+#include <fstream>
 #include <future>
+#include <sstream>
 
 #include "os.h"
 #include "linux/x11.h"
@@ -158,6 +160,60 @@ OSWindow OSWindow::FromJsValue(const Napi::Value jsval) {
 	return OSWindow(handleint);
 }
 
+/**
+ * Retrieves the name of the process associated with a window.
+ * 
+ * @param window Window to get the associated process name of.
+ * @return Name of the process the window is associated with.
+ */
+std::string GetProcessName(const xcb_window_t window) {
+	// Get the process ID atom
+	constexpr char pidTag[] = "_NET_WM_PID";
+	const auto pidCookie = xcb_intern_atom(connection, 0, strlen(pidTag), pidTag);
+	const auto pidReply = xcb_intern_atom_reply(connection, pidCookie, nullptr);
+
+	if (!pidReply) {
+		return "";
+	}
+
+	const auto pidAtom = pidReply->atom;
+	free(pidReply);
+
+	// Get the process ID property
+	const auto propCookie = xcb_get_property(connection, 0, window, pidAtom, XCB_ATOM_CARDINAL, 0, 1);
+	const auto propReply = xcb_get_property_reply(connection, propCookie, nullptr);
+
+	if (!propReply) {
+		return "";
+	}
+
+	// Read the value from the process ID property
+	auto pid = 0u;
+
+	if (xcb_get_property_value_length(propReply) == 4) {
+		pid = *static_cast<uint32_t*>(xcb_get_property_value(propReply));
+	}
+
+	free(propReply);
+
+	if (pid == 0) {
+		return "";
+	}
+
+	// Read the process name from /proc/<pid>/comm
+	std::stringstream path;
+	path << "/proc/" << pid << "/comm";
+
+	std::ifstream file(path.str());
+	if (!file.is_open()) {
+		return "";
+	}
+
+	std::string name;
+	std::getline(file, name);
+	return name;
+}
+
 bool IsRsWindow(const xcb_window_t window) {
 	ensureConnection();
 	constexpr uint32_t long_length = 64; // Any length higher than 2x+3 of the longest string we may match is fine
@@ -185,34 +241,21 @@ bool IsRsWindow(const xcb_window_t window) {
 					/* Covers both normal and compatibility mode (substring of RuneScape (compatibility mode) )*/
 					if (str_title.compare(0, sizeof("RuneScape") - 1, "RuneScape") == 0) {
 						if (replyTransient && xcb_get_property_value_length(replyTransient) == 0) {
-							xcb_get_geometry_cookie_t geomCookie = xcb_get_geometry(connection, window);
-							xcb_get_geometry_reply_t* geomReply = xcb_get_geometry_reply(connection, geomCookie, NULL);
-							if (geomReply) {
-								uint16_t width = geomReply->width;
-								uint16_t height = geomReply->height;
-								free(geomReply);
-								if (width == 720 && height == 480) {
-									/* The launcher window doesn't actually get killed on closing, it still exists in xwayland invisibly (Also not visible to the wayland compositor, only to xwayland).
-									 * A workaround is to kill this window with xdotool if it matches this exact window size (it does not change) in for instance a .desktop file of the jagex launcher.
-									 * This native code could also possibly do this, but it's probably out of scope.
-									 * The native code has no other ways to identify it as the window's class and title are exactly the same as the actual game window.
-									 * */
-									std::cout << "Found RuneScape Launcher phantom window: " << width << "x" << height << "\n";
-								} else {
-									std::cout << "Found correct RuneScape window: " << str_title << std::endl;
-									free(replyProp);
-									return true;
-								}
+							// Game client window runs under the rs2client.exe process
+							if (GetProcessName(window) == "rs2client.exe") {
+								std::cout << "Found correct RuneScape window: " << str_title << std::endl;
+								free(replyProp);
+								return true;
 							}
 						} else {
 							std::cout << "NonTransient window found: " << str_title << std::endl;
 						}
 					}
 				}
-
 			}
 		}
 	}
+
 	free(replyProp);
 	return false;
 }
