@@ -14,9 +14,7 @@ If you're using wayland, the compositor is unaware of any positioning that `alt1
 - Set the window to not be tiled
 - Disable any borders
 
-On other non-tiling desktop/window managers such as KDE and gnome, it should be more straightforward, though the position issues remain.
-
-There is also one bug with the Runescape launcher when using xwayland, as it keeps open its launcher window (the one with the loading progress bar), which is only visible to xwayland and not to wayland. There is one workaround for this in commit `c9e83c3`, which checks for a window with the exact same window title and class as the 'real' Runescape client, but with a fixed size of 720x480. DO NOT RESIZE THE LAUNCHER WINDOW AND DO NOT RESIZE YOUR CLIENT TO 720x480, this will break alt1-electron. Without the workaround, alt1-electron will hook onto both the real client and the phantom window, causing it to fail as the phantom window does not have any rs information. Any better suggestions for fixing this than using the window size are appreciated. It can also be solved by using a hook script on opening the rs3 window, using `xdotool` to close the fake/phantom window once the rs3 window is opened, this is out of scope for adding to this project though.
+On other non-tiling desktop/window managers such as KDE and gnome, it should be more straightforward, though the position issues remain. Recommended is to add window rules to keep the overlay window in the same coordinates and having the same size as the Runescape client. Again, this app is unable to do this reliably due to the way wayland works, and creating/documenting configs for every possible WM/DE is out of scope for this project. Pull requests containing documentation on how you got it working on your setup - assuming documentation for such setup do not exist yet - are allowed though.
 
 # Alt1 Electron (name pending)
 This project is an experimental rewrite of the Alt1 Toolkit in Typescript, Electron and React. The project is currently in an experimental state, it will likely not become a replacement for C# Alt1 since the official devs have found their own solutions for the C# issues that were originally presented.
