@@ -781,7 +781,7 @@ void RecordThread() {
 	xcb_void_cookie_t cookie = xcb_record_create_context_checked(connection, id, 0, 1, 1, &client_spec, &range);
 	xcb_generic_error_t* error = xcb_request_check(connection, cookie);
 	if (error) {
-		std::cout << "native: couldn't setup X record: xcb_record_create_context_checked returned " << (int)error->error_code << "; some features will not work" << std::endl;
+		std::cout << "native: couldn't setup X record: xcb_record_create_context_checked returned " << (int)error->error_code << " (sequence: " << error->sequence << "); some features will not work" << std::endl;
 		free(error);
 		return;
 	}
@@ -793,9 +793,10 @@ void RecordThread() {
 	}
 	g_recordConn.store(rec_connection, std::memory_order_release);
 
+	auto cookie2 = xcb_record_enable_context(rec_connection, id);
+
 	// xcb-record event loop
 	while (!g_stopThreads.load(std::memory_order_acquire) && WindowThreadShouldRun()) {
-		auto cookie2 = xcb_record_enable_context(rec_connection, id);
 		auto* reply = xcb_record_enable_context_reply(rec_connection, cookie2, NULL);
 		if (!reply) {
 			if (!g_stopThreads.load(std::memory_order_acquire)) {
@@ -867,6 +868,7 @@ void RecordThread() {
 	}
 
 	xcb_connection_t* expected = rec_connection;
+	std::cout << "native: record thread exiting" << std::endl;
 	const bool stillOwned =
 	g_recordConn.compare_exchange_strong(expected, nullptr, std::memory_order_acq_rel);
 
@@ -878,5 +880,4 @@ void RecordThread() {
 	} else {
 		// Already disconnected by shutdown path.
 	}
-	std::cout << "native: record thread exiting" << std::endl;
 }
