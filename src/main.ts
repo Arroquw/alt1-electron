@@ -196,7 +196,17 @@ function updateTray() {
 		});
 		menu.push({ label: "Repin RS", click: e => { rsInstances.forEach(e => e.close()); detectInstances(); } });
 		menu.push({ label: "Reload native addon", click: e => { reloadAddon(); } });
-		menu.push({ label: "Hook dev tools", type: "checkbox", checked: alwaysOpenDevtools, click: e => alwaysOpenDevtools = !alwaysOpenDevtools });
+		menu.push(
+			{
+				label: "Hook dev tools: " + alwaysOpenDevtools,
+				type: "checkbox",
+				checked: alwaysOpenDevtools,
+				icon: undefined,
+				click: (e) => {
+					alwaysOpenDevtools = e.checked;
+					updateTray();
+				}
+			});
 	}
 	menu.push({ type: "separator" });
 	menu.push({ label: "Settings", click: showSettings });

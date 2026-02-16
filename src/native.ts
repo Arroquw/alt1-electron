@@ -64,13 +64,13 @@ function getCachePath(): string {
 }
 
 export function shutdownAddon() {
-	try { native.shutdown?.(); } catch {}
+	try { native.shutdown?.(); } catch { }
 }
 
 //(Re)loads the native code, this gives all kinds of mem leaks and other trouble if called more than once, only do so for debugging
 export function reloadAddon() {
 	//TODO fix hardcoded build path
-	try { native?.shutdown?.(); } catch {}
+	try { native?.shutdown?.(); } catch { }
 	const addon_source = process.env.NATIVE_ADDON_PATH ?? findAddon();
 
 	let addon_path = addon_source;
