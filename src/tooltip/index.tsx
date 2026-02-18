@@ -1,6 +1,7 @@
 import "./style.scss";
 import "./index.html";
-import { ipcRenderer } from "electron/renderer";
+
+const ipcRenderer = window.electronIPC;
 
 ipcRenderer.on("settooltip", (e, text: string) => {
 	let el = document.getElementById("content")!;

@@ -1,4 +1,3 @@
-import { ipcRenderer } from "electron/renderer";
 import { OverlayCommand, OverlayPrimitive, imageDataFrom } from "../shared";
 
 import "./index.html";
@@ -15,6 +14,8 @@ let ctx = cnv.getContext("2d")!;
 let redrawtimer = 0;
 let shutdowntimer = 0;
 const shutdowntimeout = 30 * 1000;
+
+const ipcRenderer = window.electronIPC;
 
 function resizeCanvas() {
   cnv.width = cnv.clientWidth;

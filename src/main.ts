@@ -18,7 +18,6 @@ if (process.env.NODE_ENV === "development") {
 	(global as any).native = require("./native");
 	(global as any).Alt1lite = require("./main");
 }
-
 export const admins = new Set<number>();
 export const managedWindows: ManagedWindow[] = [];
 export function getManagedWindow(w: WebContents) { return managedWindows.find(q => q.window.webContents == w); }
@@ -124,9 +123,10 @@ export class ManagedWindow {
 			webPreferences: {
 				nodeIntegration: true,
 				webviewTag: true,
-				contextIsolation: false,
+				contextIsolation: true,
 				nodeIntegrationInSubFrames: false,
-				nodeIntegrationInWorker: false
+				nodeIntegrationInWorker: false,
+				preload: path.join(__dirname, 'appframe/preload.bundle.js'),
 			},
 			frame: false,
 			width: posrect.width,
@@ -231,7 +231,12 @@ export function showSettings() {
 		return;
 	}
 	settingsWnd = new BrowserWindow({
-		webPreferences: { nodeIntegration: true, webviewTag: true, contextIsolation: false },
+		webPreferences: {
+			preload: path.join(__dirname, 'appframe/preload.bundle.js'),
+			nodeIntegration: true,
+			webviewTag: true,
+			contextIsolation: true
+		},
 	});
 	settingsWnd.loadFile(path.resolve(__dirname, "settings/index.html"));
 	settingsWnd.once("close", () => {
@@ -274,7 +279,11 @@ class TooltipWindow {
 	loaded = false;
 	constructor() {
 		let wnd = new BrowserWindow({
-			webPreferences: { nodeIntegration: true, contextIsolation: false },
+			webPreferences: {
+				nodeIntegration: true,
+				contextIsolation: true,
+				preload: path.join(__dirname, 'appframe/preload.bundle.js'),
+			},
 			frame: false,
 			transparent: true,
 			show: false,

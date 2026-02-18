@@ -1,13 +1,13 @@
-import { ipcRenderer } from "electron";
 import type { Settings, Bookmark } from "../settings";
 import type { CaptureMode } from "../native";
 import * as React from "react";
 import * as ReactDom from "react-dom";
-import "../appframe/alt1api";
 import * as a1lib from "alt1";
 import { runCaptureDiagnostic } from "../readers/capturediagnostic";
 import "./style.scss";
 import "./index.html";
+
+const ipcRenderer = window.electronIPC;
 
 window.addEventListener("DOMContentLoaded", start);
 
@@ -78,21 +78,21 @@ class AppSettings extends React.Component<AppSettingsProps, AppSettingsState> {
 		this.setState({ busy: true, error: "", status: "", pending: null });
 
 		try {
-		const res = await ipcRenderer.invoke("installapp_preview", input);
-		// res: { normalizedUrl: string, config: AppConfigImport }
-		this.setState({
-			pending: {
-			normalizedUrl: res.normalizedUrl,
-			appName: res.config.appName,
-			description: res.config.description || ""
-			},
-			busy: false
-		});
+			const res = await ipcRenderer.invoke("installapp_preview", input);
+			// res: { normalizedUrl: string, config: AppConfigImport }
+			this.setState({
+				pending: {
+					normalizedUrl: res.normalizedUrl,
+					appName: res.config.appName,
+					description: res.config.description || ""
+				},
+				busy: false
+			});
 		} catch (err: any) {
-		this.setState({
-			error: err?.message ?? String(err),
-			busy: false
-		});
+			this.setState({
+				error: err?.message ?? String(err),
+				busy: false
+			});
 		}
 	}
 
@@ -101,18 +101,18 @@ class AppSettings extends React.Component<AppSettingsProps, AppSettingsState> {
 
 		this.setState({ busy: true, error: "", status: "" });
 		try {
-		await ipcRenderer.invoke("installapp_confirm", this.state.pending.normalizedUrl);
-		this.setState({
-			status: `Installed ${this.state.pending.appName}`,
-			configUrl: "",
-			pending: null,
-			busy: false
-		});
+			await ipcRenderer.invoke("installapp_confirm", this.state.pending.normalizedUrl);
+			this.setState({
+				status: `Installed ${this.state.pending.appName}`,
+				configUrl: "",
+				pending: null,
+				busy: false
+			});
 		} catch (err: any) {
-		this.setState({
-			error: err?.message ?? String(err),
-			busy: false
-		});
+			this.setState({
+				error: err?.message ?? String(err),
+				busy: false
+			});
 		}
 	}
 
