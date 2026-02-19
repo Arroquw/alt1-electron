@@ -4,6 +4,20 @@ import { ipcRenderer } from "electron";
 import { FlatImageData, SyncResponse, OverlayCommand, RsClientState } from "../shared";
 import { decodeImageString } from "alt1";
 
+export type StatusDaemon = {
+	url: string | null,
+	state: string,
+	timer: NodeJS.Timeout | null,
+	lastDelay: number,
+};
+
+let daemon: StatusDaemon = {
+	url: null as string | null,
+	state: "" as string,
+	timer: null as NodeJS.Timeout | null,
+	lastDelay: 0,
+};
+
 let warningsTriggered: string[] = [];
 function warn(key: string, message: string) {
 	if (!warningsTriggered.includes(key)) {
@@ -113,6 +127,37 @@ function setTooltip(text: string) {
 	ipcRenderer.send("settooltip", text);
 }
 
+async function runDaemon() {
+	if (!daemon.url) return;
+
+	try {
+		const res = await fetch(daemon.url, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ state: daemon.state }),
+		});
+		if (!res.ok) throw new Error("POST to " + daemon.url + " failed: " + res.status);
+
+		const result = await res.json();
+		const now = typeof result.now === "number" ? result.now : Date.now();
+
+		if (typeof result.state === "string") {
+			daemon.state = result.state;
+		}
+
+		if (typeof result.nextRun === "number" && result.nextRun !== 0) {
+			const calculatedDelay = result.nextRun - now;
+			daemon.lastDelay = Math.max(0, calculatedDelay);
+		}
+		ipcRenderer.send("daemonrun", result);
+	} catch (e) {
+		console.error("Daemon fetch failed:", e);
+		if (daemon.lastDelay === 0) daemon.lastDelay = 10_000;
+	} finally {
+		daemon.timer = setTimeout(runDaemon, daemon.lastDelay);
+	}
+}
+
 //TODO use contextBridge.exposeInMainWorld
 var alt1api: Partial<typeof alt1> = {
 
@@ -192,16 +237,26 @@ var alt1api: Partial<typeof alt1> = {
 	setTooltip(str) { setTooltip(str); return true; },
 	clearTooltip() { setTooltip(""); },
 	registerStatusDaemon(serverUrl: string, state: string) {
-		return JSON.stringify({
-			state: "",
-			nextRun: 100,
-			alerts: [{ title: "", body: "" }],
-			status: [{ status: "" }],
-		});
+		if (daemon.timer) clearTimeout(daemon.timer);
+		if (serverUrl === null) {
+			daemon = {
+				url: null,
+				state: "",
+				timer: null,
+				lastDelay: 0,
+			};
+			return;
+		}
+
+		daemon.url = serverUrl;
+		daemon.state = state ?? "";
+		daemon.lastDelay = 500;
+
+		runDaemon();
 	},
 
 	getStatusDaemonState() {
-		return "";
+		return daemon.state ?? "";
 	},
 
 	//new API's
@@ -226,8 +281,12 @@ var alt1api: Partial<typeof alt1> = {
 	},
 	userResize(left, top, right, bot) {
 		ipcRenderer.sendSync("dragwindow", left, top, right, bot);
-	}
+	},
 
+	setTitleBarText(text: string) {
+		console.log("Setting title bar text to: ", text);
+		return;
+	},
 	//TODO
 	// bindFindSubImg: ,
 	// getRegionMulti: ,

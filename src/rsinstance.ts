@@ -346,4 +346,12 @@ export class RsInstance extends TypedEmitter<RsInstanceEvents> {
 			this.overlayWindow.browser.webContents.send("overlay", frameid, commands);
 		}
 	}
+
+	runDaemon(result: any) {
+		this.emitAppEvent("", "daemonrun", {
+			result: result,
+			eventName: "daemonrun"
+		});
+
+	}
 }

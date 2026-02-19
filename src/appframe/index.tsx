@@ -31,13 +31,13 @@ function AppFrame(p: {}) {
 	useLayoutEffect(() => {
 		let view = document.createElement("webview");
 		view.className = "appframe";
-		view.preload = new URL("./alt1api.bundle.js", window.location.href).pathname;
+		view.preload = new URL("./alt1api.bundle.js", window.location.href).href;
 		view.allowpopups = true;
 		view.nodeintegration = false;
 		view.nodeintegrationinsubframes = false;
 		view.src = thiswindow.appConfig.appUrl;
 		//view.webpreferences = "sandbox,contextIsolation=true";
-		view.webpreferences = "sandbox,contextIsolation=false";
+		view.webpreferences = "sandbox=false,contextIsolation=false";
 		gridel.current!.appendChild(view);
 		view.addEventListener("dom-ready", () => {
 			//TODO is there a better way to get a ref to the frame?
