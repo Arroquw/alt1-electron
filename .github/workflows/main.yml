@@ -35,6 +35,14 @@ jobs:
           npm run build
           npx electron-builder -l --publish never
 
+      - name: Move nightly tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api -X PATCH \
+            repos/${{ github.repository }}/git/refs/tags/nightly \
+            -f sha="${GITHUB_SHA}"
+
       - name: Publish rolling Nightly release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
