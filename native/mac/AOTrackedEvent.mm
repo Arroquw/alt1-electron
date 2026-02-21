@@ -16,8 +16,8 @@
 @implementation AOTrackedEvent {
     CGWindowID window;
     WindowEventType type;
-    Napi::ThreadSafeFunction callback;
-    Napi::FunctionReference callbackRef;
+    std::shared_ptr<Napi::ThreadSafeFunction> callbackTsfn;
+    std::shared_ptr<Napi::FunctionReference> callbackRef;
 }
 
 #pragma mark - Private Category functions
@@ -54,23 +54,22 @@
     return @"";
 }
 
-+ (void) IterateEvents: (TrackedEventCondition) condition andCallback:(std::function<void(Napi::Env, Napi::Function)>) cb {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        NSLock *lock = [AOTrackedEvent eventLock];
-        @try {
-            [lock tryLock];
-            NSSet<AOTrackedEvent*> *events = [AOTrackedEvent events];
-            for(AOTrackedEvent *event in events) {
-                if(condition(event)) {
-                    event->callback.BlockingCall([cb](Napi::Env env, Napi::Function jsCallback) {
-                        cb(env, jsCallback);
-                    });
-                }
++ (void) IterateEvents:(TrackedEventCondition)condition andCallback:(std::function<void(Napi::Env, Napi::Function)>)cb {
+    // No dispatch_async — NonBlockingCall handles marshalling to Node thread
+    NSLock *lock = [AOTrackedEvent eventLock];
+    @try {
+        [lock tryLock];
+        NSSet<AOTrackedEvent*> *events = [[AOTrackedEvent events] copy];
+        for (AOTrackedEvent *event in events) {
+            if (condition(event)) {
+                event->callbackTsfn->NonBlockingCall([cb](Napi::Env env, Napi::Function jsCallback) {
+                    cb(env, jsCallback);
+                });
             }
-        } @finally {
-            [lock unlock];
         }
-    });
+    } @finally {
+        [lock unlock];
+    }
 }
 
 + (void) pushEvent: (AOTrackedEvent*)event {
@@ -88,46 +87,37 @@
     [lock unlock];
 }
 
-+ (BOOL) eventsContain: (CGWindowID) window andType: (WindowEventType) type andCallback:(Napi::Function) callback {
-    NSLock *lock = [AOTrackedEvent eventLock];
-    @try {
-        [lock tryLock];
-        NSMutableSet<AOTrackedEvent*> *events = [AOTrackedEvent events];
-        NSArray<AOTrackedEvent*> *ievents = [events allObjects];
-        for(AOTrackedEvent *event in ievents) {
-            if(event->window == window && event->type == type && event->callbackRef == Napi::Persistent(callback)) {
-                return YES;
-            }
++ (BOOL) eventsContain:(CGWindowID)window andType:(WindowEventType)type andRef:(std::shared_ptr<Napi::FunctionReference>)ref {
+    for (AOTrackedEvent *event in [AOTrackedEvent events]) {
+        if (event->window == window && event->type == type) {
+            return YES;  // one listener per window+type is enough
         }
-        return NO;
-    } @finally {
-        [lock unlock];
     }
+    return NO;
 }
 
-+ (void) push: (CGWindowID) window andType: (WindowEventType) type andCallback:(Napi::Function) callback {
-    if(![AOTrackedEvent eventsContain:window andType:type andCallback:callback]) {
-//        std::string str = callback.ToString().Utf8Value();
-//        const char* cstr = str.c_str();
-//        printf("event cb: %s\n", cstr);
++ (void) push:(CGWindowID)window 
+      andType:(WindowEventType)type 
+         tsfn:(std::shared_ptr<Napi::ThreadSafeFunction>)tsfn
+          ref:(std::shared_ptr<Napi::FunctionReference>)ref {
+    if (![AOTrackedEvent eventsContain:window andType:type andRef:ref]) {
         NSLog(@"pushing event: Event[%@, %d]", [AOTrackedEvent typeName:type], window);
-        [AOTrackedEvent pushEvent: [[AOTrackedEvent alloc] initWith:window andType:type andCallback:callback]];
+        [AOTrackedEvent pushEvent:[[AOTrackedEvent alloc] initWith:window andType:type tsfn:tsfn ref:ref]];
     }
 }
 
-+ (void) remove: (CGWindowID) window andType: (WindowEventType) type andCallback:(Napi::Function) callback {
++ (void) remove:(CGWindowID)window andType:(WindowEventType)type andCallback:(Napi::Function)callback {
     NSLock *lock = [AOTrackedEvent eventLock];
     [lock tryLock];
     NSMutableSet<AOTrackedEvent*> *events = [AOTrackedEvent events];
-    NSLog(@"remove: Events Before: %@ [%@]", @([events count]), events);
     NSArray<AOTrackedEvent*> *ievents = [events allObjects];
-    for(AOTrackedEvent *event in ievents) {
-        if(event->window == window && event->type == type && event->callbackRef == Napi::Persistent(callback)) {
-            event->callback.Release();
+    for (AOTrackedEvent *event in ievents) {
+        if (event->window == window && event->type == type &&
+            event->callbackRef->Value().As<Napi::Function>() == callback) {
+            event->callbackTsfn->Release();
             [events removeObject:event];
         }
     }
-    NSLog(@"remove: Events After: %@ [%@]", @([events count]), events);
     [lock unlock];
 }
 
@@ -147,13 +137,16 @@
     return [NSString stringWithFormat:@"Event[%@, %d]", [AOTrackedEvent typeName:self->type], self->window];
 }
 
-- (instancetype) initWith: (CGWindowID) window andType: (WindowEventType) type andCallback:(Napi::Function) callback {
+- (instancetype) initWith:(CGWindowID)w 
+                  andType:(WindowEventType)t
+                     tsfn:(std::shared_ptr<Napi::ThreadSafeFunction>)tsfn
+                      ref:(std::shared_ptr<Napi::FunctionReference>)ref {
     self = [super init];
     if (self != nil) {
-        self->window = window;
-        self->type = type;
-        self->callback = Napi::ThreadSafeFunction::New(callback.Env(), callback, "event", 0, 1, [](Napi::Env) {});
-        self->callbackRef = Napi::Persistent(callback);
+        self->window = w;
+        self->type = t;
+        self->callbackTsfn = tsfn;
+        self->callbackRef = ref;
     }
     return self;
 }

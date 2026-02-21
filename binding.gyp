@@ -98,6 +98,8 @@
 						"./native/mac/AONSWindowDelegate.h",
 						"./native/mac/AOUtil.h",
 						"./native/mac/AOUtil.mm",
+						"./native/mac/AOTrackedEvent.mm",
+						"./native/mac/AOTrackedEvent.h",
 					],
 					"cflags_cc": [ "-std=c++17" ],
 				}],

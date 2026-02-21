@@ -47,12 +47,12 @@
 
 - (void)windowDidBecomeMain:(NSNotification *)notification {
     [delegate windowDidBecomeMain:notification];
-    [AOUtil updateWindow:notification.object];
+  //  [AOUtil updateWindow:notification.object];
 }
 
 - (void)windowDidResignMain:(NSNotification *)notification {
     [delegate windowDidResignMain:notification];
-    [AOUtil updateWindow:notification.object];
+   // [AOUtil updateWindow:notification.object];
 }
 
 - (void)windowDidBecomeKey:(NSNotification*)notification {

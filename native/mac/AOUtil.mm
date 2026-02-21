@@ -6,6 +6,7 @@
 //
 
 #import "AOUtil.h"
+#import "AOTrackedEvent.h"
 
 @interface AOUtil()
 + (void (^)(void)) createEventBlocks;
@@ -110,8 +111,10 @@ static bool rightMouseDown = false;
 
 @implementation AOUtil
 +(void) initialize {
-    dispatch_once_t once;
-    dispatch_once(&once, [AOUtil createEventBlocks]);
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        [AOUtil createEventBlocks]();
+    });
 }
 
 
@@ -173,7 +176,7 @@ static bool rightMouseDown = false;
         [AOUtil lockPidLock];
         NSDictionary *userInfo = [note userInfo];
         NSRunningApplication *app = [userInfo objectForKey:NSWorkspaceApplicationKey];
-        if([[app localizedName] caseInsensitiveCompare:@"rs2client"]) {
+        if([[app localizedName] caseInsensitiveCompare:@"rs2client"] == NSOrderedSame) {
             [AOUtil handleRsDidLaunch:[app processIdentifier]];
             NSLog(@"RS Launched: %d %@", [app processIdentifier], [app localizedName]);
         }
@@ -259,6 +262,36 @@ static bool rightMouseDown = false;
     [pidRef release];
 }
 
++ (CGWindowID) appWindowFromPid:(pid_t) pid {
+    CFArrayRef windowList = CGWindowListCopyWindowInfo(
+        kCGWindowListOptionAll | kCGWindowListExcludeDesktopElements, 
+        kCGNullWindowID);
+    
+    CGWindowID result = kCGNullWindowID;
+    NSArray *windows = (NSArray *)windowList;
+    
+    for (NSDictionary *window in windows) {
+        NSNumber *winPid = window[(NSString *)kCGWindowOwnerPID];
+        if ([winPid intValue] != pid) continue;
+        
+        // Skip tiny/invisible windows
+        NSNumber *alpha = window[(NSString *)kCGWindowAlpha];
+        if ([alpha floatValue] <= 0) continue;
+        
+        NSDictionary *bounds = window[(NSString *)kCGWindowBounds];
+        NSNumber *width = bounds[@"Width"];
+        NSNumber *height = bounds[@"Height"];
+        if ([width intValue] < 100 || [height intValue] < 100) continue;
+        
+        NSNumber *winId = window[(NSString *)kCGWindowNumber];
+        result = [winId unsignedIntValue];
+        break;
+    }
+    
+    CFRelease(windowList);
+    return result;
+}
+
 + (void) handleRsDidLaunch:(pid_t)pid {
     if(observers.find(pid) == observers.end()) {
         AXUIElementRef appRef = AXUIElementCreateApplication(pid);
@@ -270,22 +303,45 @@ static bool rightMouseDown = false;
         if ([AOUtil updateNotifications:true forObserver:obs withAppRef:appRef withReferenceObj:nullptr withNotifications:kAXApplicationShownNotification, kAXApplicationHiddenNotification, kAXApplicationActivatedNotification,
              kAXApplicationDeactivatedNotification, kAXWindowMiniaturizedNotification, kAXWindowDeminiaturizedNotification, kAXWindowMovedNotification,
              kAXWindowResizedNotification, kAXUIElementDestroyedNotification, NULL]) {
+                CFRunLoopAddSource(CFRunLoopGetCurrent(), AXObserverGetRunLoopSource(obs), kCFRunLoopDefaultMode);
+                NSNumber* pidRef = @(pid);
+                NSLog(@"Notifications added for %@ because it was launched", pidRef);
 
-            CFRunLoopAddSource(CFRunLoopGetCurrent(), AXObserverGetRunLoopSource(obs), kCFRunLoopDefaultMode);
-            NSNumber* pidRef = @(pid);
-            NSLog(@"Notifications added for %@ because it was launched", pidRef);
-            CGWindowID windowId = [AOUtil appFocusedWindow:pid];
-            if(trackedWindows[pidRef] == nil) {
-                [AOTrackedEvent IterateEvents:^BOOL(AOTrackedEvent* e) {
-                    return e.type == WindowEventType::Show && e.window == 0;
-                } andCallback:[windowId, pid](Napi::Env env, Napi::Function callback) {
-                    NSLog(@"mac: Notified alt1 of new RS instance winid[%d] pid[%d]", windowId, pid);
-                    callback.Call({Napi::BigInt::New(env, (uint64_t)windowId), Napi::Number::New(env, 0)});
-                }];
-            }
+             __block int attempts = 0;
+                __block void (^tryGetWindow)(void);
+            tryGetWindow = [^{
+                //CGWindowID windowId = [AOUtil appFocusedWindow:pid];
+                CGWindowID windowId = [AOUtil appWindowFromPid:pid];
+                if (windowId == kCGNullWindowID && attempts < 10) {
+                    attempts++;
+                    NSLog(@"RS window not ready, attempt %d/10", attempts);
+                    void (^copy)(void) = [tryGetWindow copy];
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
+                            dispatch_get_main_queue(), copy);
+                    return;
+                }
+                if (windowId != kCGNullWindowID) {
+                    NSNumber *pidNum = @(pid);
+                    if (trackedWindows[pidNum] == nil) {
+                        NSLog(@"mac: Found RS window %u for pid %d, firing Show callback", windowId, pid);
+                            [AOTrackedEvent IterateEvents:^BOOL(AOTrackedEvent* e) {
+                            return e.type == WindowEventType::Show && e.window == 0;
+                        } andCallback:[windowId, pid](Napi::Env env, Napi::Function callback) {
+                            NSLog(@"mac: Notified alt1 of new RS instance winid[%d] pid[%d]", windowId, pid);
+                            NSLog(@"mac: Show callback executing for winid[%d] pid[%d]", windowId, pid);
+                            callback.Call({Napi::BigInt::New(env, (uint64_t)windowId), Napi::Number::New(env, 0)});
+                        }];
+                    } else {
+                        NSLog(@"mac: Already tracking window for pid %d", pid);
+                    }
+                } else {
+                    NSLog(@"Failed to get RS window, returned null for pid %d", pid);
+                }
+            } copy];
+            tryGetWindow();
+        } else {
+            NSLog(@"Already tracking %@", @(pid));
         }
-    } else {
-        NSLog(@"Already tracking %@", @(pid));
     }
 }
 
@@ -379,18 +435,45 @@ static bool rightMouseDown = false;
     return leftMouseDown;
 }
 
-+ (void) macOSNewWindowListener:(CGWindowID) window type: (WindowEventType) type callback: (Napi::Function) callback {
-    pid_t pid =  [AOUtil pidForWindow:window];
-    NSLog(@"AOPID: %@ Window: %@ Pid: %@", @([[NSRunningApplication currentApplication] processIdentifier]), @(window), @(pid));
-    if(!ax_privilege()) {
-        NSLog(@"alt1 will not work without accessibility permissions");
-        exit(1);
++ (void) macOSNewWindowListener:(CGWindowID)window 
+                           type:(WindowEventType)type
+                           tsfn:(std::shared_ptr<Napi::ThreadSafeFunction>)tsfn
+                            ref:(std::shared_ptr<Napi::FunctionReference>)ref {
+    NSLog(@"macOSNewWindowListener entry: window=%u type=%u", window, type);
+
+    // Check for duplicate FIRST before any other work
+    if ([AOTrackedEvent eventsContain:window andType:type andRef:ref]) {
+        NSLog(@"macOSNewWindowListener: already tracking window=%u type=%u, skipping", window, type);
+        tsfn->Release();  // release the TSFN we created since we won't store it
+        return;
     }
+
+    if (window != 0) {
+        pid_t pid = [AOUtil pidForWindow:window];
+        NSLog(@"AOPID: %@ Window: %@ Pid: %@", 
+              @([[NSRunningApplication currentApplication] processIdentifier]), 
+              @(window), @(pid));
+    }
+
+    int attempts = 0; 
+    while (true) {
+    if (ax_privilege() || attempts >= 5) {
+            break;
+        }
+        NSLog(@"no accessibility permissions! Retrying until access is permitted or 100 seconds have passed");
+        sleep(20);
+        attempts++;
+        //tsfn->Release();
+        //return;
+    }
+
 #if MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_15
-    CGRequestScreenCaptureAccess();
+    dispatch_async(dispatch_get_main_queue(), ^{
+        CGRequestScreenCaptureAccess();
+    });
 #endif
-    NSLog(@"macOSNewWindowListener: %u %d", window, type);
-    [AOTrackedEvent push: window andType:type andCallback:callback];
+
+    [AOTrackedEvent push:window andType:type tsfn:tsfn ref:ref];
 }
 
 + (void) macOSRemoveWindowListener:(CGWindowID) window type: (WindowEventType) type callback: (Napi::Function) callback {
@@ -399,7 +482,7 @@ static bool rightMouseDown = false;
 
 + (void) macOSSetParent:(OSWindow) parent forWindow: (OSWindow) wnd {
     NSView *view = wnd.handle.view;
-    [AOUtil interceptDelegate:[view window]];
+//    [AOUtil interceptDelegate:[view window]];
     NSInteger winnum = [[view window] windowNumber];
     NSNumber *winIdRef = @(winnum);
     if (parent.handle.winid == 0) {
@@ -434,7 +517,8 @@ static bool rightMouseDown = false;
     [window invalidateShadow];
     if ([AOUtil shouldBeOnTop]) {
         [window setLevel:NSScreenSaverWindowLevel];
-        [window makeKeyAndOrderFront:nil];
+        // Don't force makeKeyAndOrderFront — let Electron manage focus
+        [window orderFront:nil];  // orderFront instead of makeKeyAndOrderFront
     } else {
         [window setLevel:NSNormalWindowLevel];
     }
@@ -677,6 +761,41 @@ static bool rightMouseDown = false;
     return id;
 }
 
++ (CGFloat) getTitlebarHeight:(int)pid forWindowID:(CGWindowID)windowID {
+    AXUIElementRef appRef = AXUIElementCreateApplication(pid);
+    CFArrayRef windowList;
+    
+    // Get all windows for the process
+    if (AXUIElementCopyAttributeValue(appRef, kAXWindowsAttribute, (CFTypeRef *)&windowList) == kAXErrorSuccess) {
+        for (CFIndex i = 0; i < CFArrayGetCount(windowList); i++) {
+            AXUIElementRef winRef = (AXUIElementRef)CFArrayGetValueAtIndex(windowList, i);
+            
+            // Note: In a production app, you'd match the windowID or Title here.
+            // For now, we assume the main window or compare frames.
+            CFTypeRef positionRef, sizeRef;
+            AXUIElementCopyAttributeValue(winRef, kAXPositionAttribute, &positionRef);
+            AXUIElementCopyAttributeValue(winRef, kAXSizeAttribute, &sizeRef);
+            
+            // Get the "Content" area of this specific window
+            AXUIElementRef contentRef;
+            if (AXUIElementCopyAttributeValue(winRef, kAXContentsAttribute, (CFTypeRef *)&contentRef) == kAXErrorSuccess) {
+                CFTypeRef contentPosRef;
+                AXUIElementCopyAttributeValue(contentRef, kAXPositionAttribute, &contentPosRef);
+                
+                CGPoint winPos, contentPos;
+                AXValueGetValue((AXValueRef)positionRef, (AXValueType)kAXValueCGPointType, &winPos);
+                AXValueGetValue((AXValueRef)contentPosRef, (AXValueType)kAXValueCGPointType, &contentPos);
+                
+                CFRelease(contentRef);
+                // The difference is the titlebar height
+                return contentPos.y - winPos.y; 
+            }
+        }
+    }
+    // Fallback for standard macOS titlebars if Accessibility fails
+    return 28.0; 
+}
+
 +(void) capture:(OSWindow) wnd withRects: (vector <CaptureRect>) rects {
     CFDictionaryRef windowInfo = [AOUtil findWindow: wnd.handle.winid];
     if (windowInfo == nullptr) {
@@ -686,12 +805,12 @@ static bool rightMouseDown = false;
     CGRect screenBounds;
     CGRectMakeWithDictionaryRepresentation((CFDictionaryRef) CFDictionaryGetValue(windowInfo, kCGWindowBounds), &screenBounds);
     CGWindowID windowId = static_cast<CGWindowID>(wnd.handle.winid);
-    CGImageRef scaledImageRef = CGWindowListCreateImage(CGRectNull, kCGWindowListOptionIncludingWindow, windowId, kCGWindowImageNominalResolution | kCGWindowImageBoundsIgnoreFraming);
+    CGImageRef scaledImageRef = CGWindowListCreateImage(CGRectNull, kCGWindowListOptionIncludingWindow, windowId, kCGWindowImageNominalResolution);
 
     for (vector<CaptureRect>::iterator it = rects.begin(); it != rects.end(); ++it) {
         CGRect iscreenBounds = CGRectMake((CGFloat) it->rect.x, (CGFloat) it->rect.y, (CGFloat) it->rect.width, (CGFloat) it->rect.height);
         CGImageRef imageRef = [AOUtil redrawImage:CGImageCreateWithImageInRect(scaledImageRef, iscreenBounds)];
-
+[AOUtil captureImageFile:imageRef withFilename:@"/tmp/full.png"];
         if (![AOUtil drawImage: imageRef ontoBuffer:it->data withScale:1.0 ]) {
             fprintf(stderr, "error: could not copy image data\n");
         }

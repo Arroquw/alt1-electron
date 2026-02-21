@@ -18,7 +18,7 @@
 
 #define MAX_DISPLAY_COUNT 10
 #define MENU_BAR_HEIGHT 24
-#define TITLE_BAR_HEIGHT 28
+#define TITLE_BAR_HEIGHT 29
 #define array_count(a) (sizeof((a)) / sizeof(*(a)))
 
 using namespace std;
@@ -29,7 +29,10 @@ NS_ASSUME_NONNULL_BEGIN
 + (BOOL) shouldBeOnTop;
 + (BOOL) isFullScreen:(CGRect) bounds;
 + (BOOL) macOSGetMouseState;
-+ (void) macOSNewWindowListener:(CGWindowID) window type: (WindowEventType) type callback: (Napi::Function) callback;
++ (void) macOSNewWindowListener:(CGWindowID)window 
+                           type:(WindowEventType)type
+                           tsfn:(std::shared_ptr<Napi::ThreadSafeFunction>)tsfn
+                            ref:(std::shared_ptr<Napi::FunctionReference>)ref;
 + (void) macOSRemoveWindowListener:(CGWindowID) window type: (WindowEventType) type callback: (Napi::Function) callback;
 + (void) macOSSetParent:(OSWindow) parent forWindow: (OSWindow) wnd;
 + (void) updateWindow:(NSWindow*) window;
@@ -46,7 +49,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (CGFloat) findScalingFactor: (CGDirectDisplayID) displayId;
 + (CGDirectDisplayID) findScreenForRect: (CGRect) bounds;
 
-+ (void) capture:(OSWindow)wnd withRects:(vector<CaptureRect>)rects;
++ (void) capture:(OSWindow)wnd withRects:(vector<CaptureRect>&)rects;
 + (void) captureImageFile:(CGImageRef) imageRef withFilename: (NSString*)filename;
 + (CGImageRef) redrawImage:(CGImageRef) image;
 + (BOOL) drawImage:(CGImageRef) image ontoBuffer: (void *)theData withScale: (CGFloat) scale;

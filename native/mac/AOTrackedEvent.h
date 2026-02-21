@@ -19,11 +19,16 @@ typedef BOOL (^TrackedEventCondition)(AOTrackedEvent*);
 }
 + (NSString *) typeName: (WindowEventType) type;
 + (void) IterateEvents:(TrackedEventCondition) condition andCallback:(std::function<void(Napi::Env, Napi::Function)>) cb;
-+ (void) push: (CGWindowID) window andType: (WindowEventType) type andCallback:(Napi::Function) callback;
-+ (void) remove: (CGWindowID) window andType: (WindowEventType) type andCallback:(Napi::Function) callback;
++ (void) push:(CGWindowID)window 
+      andType:(WindowEventType)type 
+         tsfn:(std::shared_ptr<Napi::ThreadSafeFunction>)tsfn
+          ref:(std::shared_ptr<Napi::FunctionReference>)ref;
++ (void) remove:(CGWindowID)window 
+        andType:(WindowEventType)type 
+        andCallback:(Napi::Function)callback;
 - (CGWindowID) window;
 - (WindowEventType) type;
-- (instancetype) initWith: (CGWindowID) window andType: (WindowEventType) type andCallback:(Napi::Function) callback;
+- (instancetype) initWith: (CGWindowID) window andType: (WindowEventType) type tsfn:(std::shared_ptr<Napi::ThreadSafeFunction>)tsfn ref:(std::shared_ptr<Napi::FunctionReference>)ref;
 
 @end
 
