@@ -11,7 +11,7 @@ declare global {
 //Error that is visible to user
 export class UserError extends Error { }
 
-export const schemestring = "alt1lite";
+export const schemestring = "alt1";
 export const weborigin = "https://runeapps.org";
 
 //needed because node-fetch tries to be correct by choking on BOM

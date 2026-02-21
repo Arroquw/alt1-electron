@@ -310,6 +310,7 @@ export class RsInstance extends TypedEmitter<RsInstanceEvents> {
 
 	overlayCommands(frameid: number, commands: OverlayCommand[]) {
 		if (!this.overlayWindow) {
+			console.log("opening overlay");
 			let bounds = this.window.getClientBounds();
 			let browser = new BrowserWindow({
 				webPreferences: { nodeIntegration: true, contextIsolation: false },
@@ -329,6 +330,7 @@ export class RsInstance extends TypedEmitter<RsInstanceEvents> {
 			let pin: OSWindowPin = new OSWindowPin(browser, this.window, "cover");
 			browser.loadFile(path.resolve(__dirname, "overlayframe/index.html"));
 			browser.on("closed", () => {
+				console.log("closing overlay");
 				pin.unpin();
 				this.overlayWindow = null;
 			});

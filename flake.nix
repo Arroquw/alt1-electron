@@ -163,7 +163,7 @@
 
         devShells.default = pkgs.mkShell {
           packages = devDeps ++ electronDeps ++ x11Deps
-            ++ [ pkgs.appimage-run ];
+            ++ [ pkgs.appimage-run pkgs.gdb pkgs.chromium ];
           env = {
             ELECTRON_VERSION =
               pkgs.lib.versions.majorMinor pkgs.electron.version;

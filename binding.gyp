@@ -58,6 +58,9 @@
 						"./native/linux/shm.cc"
 					],
 					'cflags': [
+						'-O0',
+						'-g',
+						'-fno-omit-frame-pointer',
 						'<!@(<(pkg-config) --cflags xcb)',
 						'<!@(<(pkg-config) --cflags xcb-ewmh)',
 						'<!@(<(pkg-config) --cflags xcb-shm)',
@@ -81,7 +84,12 @@
 						'<!@(<(pkg-config) --libs-only-l xcb-record)',
 						'<!@(<(pkg-config) --libs-only-l xcb-shape)'
 					],
-					"cflags_cc": [ "-std=c++17" ],
+					"cflags_cc": [
+						"-std=c++17",
+						'-O0',
+						'-g',
+						'-fno-omit-frame-pointer'
+					],
 				}],
 				['OS=="mac"', {
 					"defines": [

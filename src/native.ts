@@ -81,7 +81,9 @@ export function reloadAddon() {
 		fs.copyFileSync(addon_source, tmp);
 		addon_path = tmp;
 	}
+	console.log("loading native addon");
 	native = __non_webpack_require__(addon_path);
+	console.log("Done loading native addon");
 }
 
 type windowEvents = {
@@ -159,10 +161,19 @@ export class OSWindowPin extends TypedEmitter<OSWindowPinEvents> {
 		this.updateDocking();
 		this.oswindow = new OSWindow(window.getNativeWindowHandle());
 		native.setWindowParent(this.oswindow.handle, parent.handle);
-		this.parent.on("move", this.onmove);
+		this.parent.on("move", (b, p) => {
+			console.log("move event");
+			this.onmove;
+		});
 		this.parent.on("close", this.onclose);
-		this.parent.on("click", this.onclick);
-		this.parent.on("mousemove", this.onmousemove);
+		this.parent.on("click", (pos) => {
+			console.log("click event: ", pos);
+			this.onclick;
+		});
+		this.parent.on("mousemove", (pos) => {
+			console.log("mouse move event: ", pos);
+			this.onmousemove;
+		});
 	}
 	setPinRect(rect: PinRect) {
 		let isleft = rect.pinning.includes("left");

@@ -401,6 +401,7 @@ bool OSGetMouseState() {
 void OSNewWindowListener(OSWindow window, WindowEventType type, Napi::Function callback) {
 	if (g_shuttingDown.load(std::memory_order_acquire) ||
 		g_stopThreads.load(std::memory_order_acquire)) {
+			std::cout << "native: skipping listener registration -> shutting down" << std::endl;
 			return;
 		}
 
@@ -408,8 +409,11 @@ void OSNewWindowListener(OSWindow window, WindowEventType type, Napi::Function c
 
 	// If this is a new window, request all its events from X server
 	std::unique_lock<std::mutex> eventLock(eventMutex);
+	std::cout << "native: adding event listerner - window=" << window.handle << " type=" << (int)type << " total events=" << (trackedEvents.size()+1) << std::endl;
 	if (window.handle != 0 && std::find_if(trackedEvents.begin(), trackedEvents.end(), [window](TrackedEvent& e) {return e.window == window.handle;}) == trackedEvents.end()) {
-		constexpr uint32_t values[] = { XCB_EVENT_MASK_STRUCTURE_NOTIFY };
+		constexpr uint32_t values[] = {
+			XCB_EVENT_MASK_STRUCTURE_NOTIFY,
+		};
 		xcb_change_window_attributes(connection, window.handle, XCB_CW_EVENT_MASK, values);
 	}
 
@@ -477,6 +481,7 @@ void OSRemoveWindowListener(OSWindow window, WindowEventType type, Napi::Functio
 		return;
 	}
 	std::unique_lock<std::mutex> eventLock(eventMutex);
+	auto beforeSize = trackedEvents.size();
 
 	// If there are no more tracked events for this window, request X server to stop sending any events about it
 	if (window.handle != 0 && std::find_if(trackedEvents.begin(), trackedEvents.end(), [window](TrackedEvent& e) {return e.window == window.handle;}) == trackedEvents.end()) {
@@ -485,6 +490,9 @@ void OSRemoveWindowListener(OSWindow window, WindowEventType type, Napi::Functio
 			xcb_change_window_attributes_checked(connection, window.handle, XCB_CW_EVENT_MASK, values);
 		}
 	}
+
+	auto afterSize = trackedEvents.size();
+	std::cout << "native: Removed event listener - before=" << beforeSize << " after=" << afterSize << std::endl;
 
 	bool wait = trackedEvents.size() != 0;
 
@@ -774,6 +782,8 @@ void RecordThread() {
 	auto id = xcb_generate_id(connection);
 	xcb_record_range_t range;
 	memset(&range, 0, sizeof(xcb_record_range_t));
+	std::cout << "native: Setting up X Record range: first=" << (int)XCB_BUTTON_PRESS
+          << " last=" << (int)XCB_MOTION_NOTIFY << std::endl;
 	range.device_events.first = XCB_BUTTON_PRESS;
 	// range.device_events.last = XCB_BUTTON_RELEASE;
 	range.device_events.last  = XCB_MOTION_NOTIFY;
@@ -785,6 +795,7 @@ void RecordThread() {
 		free(error);
 		return;
 	}
+	std::cout << "native: X Record context created successfully" << std::endl;
 
 	auto rec_connection = xcb_connect(NULL, NULL);
 	if (xcb_connection_has_error(rec_connection)) {
@@ -795,6 +806,7 @@ void RecordThread() {
 
 	auto cookie2 = xcb_record_enable_context(rec_connection, id);
 
+	std::cout << "record thread: entering loop" << std::endl;
 	// xcb-record event loop
 	while (!g_stopThreads.load(std::memory_order_acquire) && WindowThreadShouldRun()) {
 		auto* reply = xcb_record_enable_context_reply(rec_connection, cookie2, NULL);
