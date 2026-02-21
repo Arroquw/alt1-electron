@@ -258,7 +258,8 @@ export function initIpcApi(ipcMain: IpcMain) {
 			lastActiveTime: wnd.rsClient.lastActiveTime,
 			ping: 10,//TODO
 			scaling: wnd.rsClient.window.getScale(),
-			captureMode: settings.captureMode
+			captureMode: settings.captureMode,
+			mousePosition: mousePosition
 		};
 		console.log("rsbounds", state);
 		e.returnValue = { value: state };

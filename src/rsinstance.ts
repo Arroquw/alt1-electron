@@ -345,19 +345,20 @@ export class RsInstance extends TypedEmitter<RsInstanceEvents>{
 			browser.on("closed", () => {
 				pin.unpin();
 				this.overlayWindow = null;
+			});
 			browser.loadFile(path.resolve(__dirname, "overlayframe/index.html")).then(() => {
 				console.log(`uh. loadFile fulfilled?`);
 			});
 			browser.once("ready-to-show", () => {
 				browser.show();
 			});
-			browser.webContents.once("dom-ready", e => {
+			browser.webContents.once("dom-ready", () => {
 				console.log("browser called 'dom-ready'");
 				for (let stalled of this.overlayWindow!.stalledOverlay) {
 					browser.webContents.send("overlay", stalled.frameid, stalled.cmd);
 				}
 			});
-			browser.on("closed", e => {
+			browser.on("closed", () => {
 				pin.unpin();
 				this.overlayWindow = null;
 				console.log("overlay closed");

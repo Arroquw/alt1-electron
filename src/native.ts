@@ -161,6 +161,7 @@ export class OSWindowPin extends TypedEmitter<OSWindowPinEvents> {
 		this.updateDocking();
 		this.oswindow = new OSWindow(window.getNativeWindowHandle());
 		native.setWindowParent(this.oswindow.handle, parent.handle);
+                console.log("parent handle:", this.parent.handle);
 		this.parent.on("move", this.onmove);
 		this.parent.on("close", this.onclose);
 		this.parent.on("click", this.onclick);

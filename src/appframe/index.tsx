@@ -42,7 +42,7 @@ function AppFrame(p: {}) {
 		view.addEventListener("dom-ready", () => {
 			//TODO is there a better way to get a ref to the frame?
 			thiswindow.appFrameId = view.getWebContentsId();
-			appcontents = remote.webContents.fromId(appview!.getWebContentsId()) ?? null;
+			appcontents = remote.webContents.fromId(appview!.getWebContentsId()) ?? undefined;
 		});
 
 		appview = view;
