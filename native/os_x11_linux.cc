@@ -242,7 +242,8 @@ bool IsRsWindow(const xcb_window_t window) {
 					if (str_title.compare(0, sizeof("RuneScape") - 1, "RuneScape") == 0) {
 						if (replyTransient && xcb_get_property_value_length(replyTransient) == 0) {
 							// Game client window runs under the rs2client.exe process
-							if (GetProcessName(window) == "rs2client.exe") {
+							auto processName = GetProcessName(window);
+							if (processName.compare(0, sizeof("rs2client") - 1, "rs2client") == 0) {
 								std::cout << "Found correct RuneScape window: " << str_title << std::endl;
 								free(replyProp);
 								return true;
