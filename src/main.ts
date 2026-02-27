@@ -230,11 +230,8 @@ export class ManagedWindow {
 }
 
 function updateTray() {
-	if (process.platform === "darwin") {
-		tray = new Tray(alt1icon.resize({ width: 16, height: 16 }));
-	} else {
-		tray = new Tray(alt1icon);
-	}
+	if (!tray)
+		throw new Error("No tray!");
 	tray.on("click", e => tray!.popUpContextMenu());
 	tray.setToolTip("Alt1 Lite");
 	let menu: MenuItemConstructorOptions[] = [];
@@ -279,7 +276,11 @@ function updateTray() {
 
 function drawTray() {
 	if (!tray) {
-		tray = new Tray(alt1icon);
+		if (process.platform === "darwin") {
+			tray = new Tray(alt1icon.resize({ width: 16, height: 16 }));
+		} else {
+			tray = new Tray(alt1icon);
+		}
 		tray.on("click", e => tray!.popUpContextMenu());
 	}
 	tray.setToolTip("Alt1 Lite");
