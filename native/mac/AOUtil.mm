@@ -802,21 +802,96 @@ static bool rightMouseDown = false;
         printf("window nil - something changed!\n");
         return;
     }
-    CGRect screenBounds;
-    CGRectMakeWithDictionaryRepresentation((CFDictionaryRef) CFDictionaryGetValue(windowInfo, kCGWindowBounds), &screenBounds);
-    CGWindowID windowId = static_cast<CGWindowID>(wnd.handle.winid);
-    CGImageRef scaledImageRef = CGWindowListCreateImage(CGRectNull, kCGWindowListOptionIncludingWindow, windowId, kCGWindowImageNominalResolution);
+    CFNumberRef windowIDRef = (CFNumberRef)CFDictionaryGetValue(windowInfo, kCGWindowNumber);
+    if (!windowIDRef) return;
 
-    for (vector<CaptureRect>::iterator it = rects.begin(); it != rects.end(); ++it) {
-        CGRect iscreenBounds = CGRectMake((CGFloat) it->rect.x, (CGFloat) it->rect.y, (CGFloat) it->rect.width, (CGFloat) it->rect.height);
-        CGImageRef imageRef = [AOUtil redrawImage:CGImageCreateWithImageInRect(scaledImageRef, iscreenBounds)];
-[AOUtil captureImageFile:imageRef withFilename:@"/tmp/full.png"];
-        if (![AOUtil drawImage: imageRef ontoBuffer:it->data withScale:1.0 ]) {
-            fprintf(stderr, "error: could not copy image data\n");
+    CGWindowID windowID;
+    CFNumberGetValue(windowIDRef, kCFNumberSInt32Type, &windowID);
+
+    // Get window bounds from the dictionary
+    CFDictionaryRef boundsDict = (CFDictionaryRef)CFDictionaryGetValue(windowInfo, kCGWindowBounds);
+    if (!boundsDict) return;
+
+    CGRect windowBounds;
+    CGRectMakeWithDictionaryRepresentation(boundsDict, &windowBounds);
+
+    // Build a window array for capture
+    CFArrayRef windowArray = CFArrayCreate(
+        kCFAllocatorDefault,
+        (const void**)&windowID,
+        1,
+        NULL
+    );
+    if (!windowArray) return;
+
+    for (CaptureRect &rect : rects) {
+        // Build the subrect relative to the window's screen position
+        CGRect captureRect = CGRectMake(
+            windowBounds.origin.x + rect.rect.x,
+            windowBounds.origin.y + rect.rect.y,
+            rect.rect.width,
+            rect.rect.height
+        );
+
+        // Capture just the specified window, clipped to captureRect
+        CGImageRef image = CGWindowListCreateImageFromArray(
+            captureRect,
+            windowArray,
+            kCGWindowImageBoundsIgnoreFraming
+        );
+
+        if (image != NULL) {
+            [AOUtil captureImageFile:image withFilename:@"/tmp/alt1_capture.png"];
         }
-        CGImageRelease(imageRef);
+
+        if (!image) continue;
+
+        size_t width  = CGImageGetWidth(image);
+        size_t height = CGImageGetHeight(image);
+        size_t bytesPerRow = width * 4; // BGRA
+
+        // Sanity check against provided buffer size
+        if (bytesPerRow * height > rect.size) {
+            CGImageRelease(image);
+            continue;
+        }
+
+        CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+
+	CGContextRef ctx = CGBitmapContextCreate(
+	    rect.data,
+	    width,
+	    height,
+	    8,
+	    bytesPerRow,
+	    colorSpace,
+	    kCGImageAlphaNoneSkipFirst | kCGBitmapByteOrder32Little // BGRA, no alpha math
+	);
+
+	if (ctx) {
+	    CGContextDrawImage(ctx, CGRectMake(0, 0, width, height), image);
+	    CGContextRelease(ctx);
+
+	    // Flip BGRA -> RGBA and force alpha to 255 (same as Windows code)
+	    uint8_t* px = (uint8_t*)rect.data;
+	    size_t pixelCount = width * height;
+	    for (size_t i = 0; i < pixelCount; i++, px += 4) {
+		uint8_t b = px[0];
+		uint8_t g = px[1];
+		uint8_t r = px[2];
+		// px[3] is alpha, discard it
+		px[0] = r;
+		px[1] = g;
+		px[2] = b;
+		px[3] = 255; // fillImageOpaque equivalent
+	    }
+	}
+
+        CGColorSpaceRelease(colorSpace);
+        CGImageRelease(image);
     }
-    CGImageRelease(scaledImageRef);
+
+    CFRelease(windowArray);
 }
 
 /*
