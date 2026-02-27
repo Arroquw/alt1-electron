@@ -105,6 +105,20 @@ function detectEdge(img: FlatImageData, rect: a1lib.Rect, hor: boolean, reverse:
 	return best;
 }
 
+
+function debugShowImage(img: ImageData) {
+	const canvas = document.createElement("canvas");
+	canvas.width = img.width;
+	canvas.height = img.height;
+
+	const ctx = canvas.getContext("2d")!;
+	ctx.putImageData(img, 0, 0);
+
+	canvas.style.border = "1px solid red";
+	canvas.style.imageRendering = "pixelated"; // important
+	document.body.appendChild(canvas);
+}
+
 function startDrag(wnd: ManagedWindow, left: boolean, top: boolean, right: boolean, bot: boolean) {
 	top ??= false; left ??= false; right ??= false; bot ??= false;
 
@@ -125,6 +139,8 @@ function startDrag(wnd: ManagedWindow, left: boolean, top: boolean, right: boole
 	//TODO display scaling
 	let imgdata = native.captureWindowMulti(wnd.rsClient.window.handle, settings.captureMode, { main: { x: 0, y: 0, width: rsbounds.width, height: rsbounds.height } }).main;
 	let img: FlatImageData = { data: imgdata, width: rsbounds.width, height: rsbounds.height };
+
+	debugShowImage(new ImageData { data: imgdata, width: rsbounds.width, height: rsbounds.height});	
 
 	let tick = () => {
 		//can't rely on any window events for this since were crossing like 5 processes and 23 threads
