@@ -1,12 +1,13 @@
 import * as a1lib from "alt1";
 import { IpcMain, IpcMainEvent, IpcMainInvokeEvent, screen } from "electron/main"
-import { BrowserWindow } from "electron";
+import { BrowserWindow, nativeImage } from "electron";
 import { sameDomainResolve } from "./lib";
 import { admins, fixTooltip, getManagedAppWindow, ManagedWindow, openApp } from "./main";
 import { native } from "./native";
 import { settings } from "./settings";
-import { FlatImageData, OverlayCommand, Rectangle, RsClientState } from "./shared";
+import { FlatImageData, OverlayCommand, Rectangle, RsClientState, imageDataFrom } from "./shared";
 import { getRsInstanceFromWnd, rsInstances } from "./rsinstance";
+import * as fs from 'fs';
 
 const snapdistance = 10;
 const snapcornerlength = 30;
@@ -105,18 +106,16 @@ function detectEdge(img: FlatImageData, rect: a1lib.Rect, hor: boolean, reverse:
 	return best;
 }
 
-
-function debugShowImage(img: ImageData) {
-	const canvas = document.createElement("canvas");
-	canvas.width = img.width;
-	canvas.height = img.height;
-
-	const ctx = canvas.getContext("2d")!;
-	ctx.putImageData(img, 0, 0);
-
-	canvas.style.border = "1px solid red";
-	canvas.style.imageRendering = "pixelated"; // important
-	document.body.appendChild(canvas);
+function debugSaveImageData(data: ImageData, path = 'debug_capture_ipcapi.png') {
+    // ImageData is RGBA, nativeImage.createFromBitmap expects BGRA
+    const buf = Buffer.from(data.data.buffer);
+    for (let i = 0; i < buf.length; i += 4) {
+        const r = buf[i];
+        buf[i] = buf[i + 2];     // B
+        buf[i + 2] = r;           // R
+    }
+    const image = nativeImage.createFromBitmap(buf, { width: data.width, height: data.height });
+    fs.writeFileSync(path, image.toPNG());
 }
 
 function startDrag(wnd: ManagedWindow, left: boolean, top: boolean, right: boolean, bot: boolean) {
@@ -139,8 +138,6 @@ function startDrag(wnd: ManagedWindow, left: boolean, top: boolean, right: boole
 	//TODO display scaling
 	let imgdata = native.captureWindowMulti(wnd.rsClient.window.handle, settings.captureMode, { main: { x: 0, y: 0, width: rsbounds.width, height: rsbounds.height } }).main;
 	let img: FlatImageData = { data: imgdata, width: rsbounds.width, height: rsbounds.height };
-
-	debugShowImage(new ImageData { data: imgdata, width: rsbounds.width, height: rsbounds.height});	
 
 	let tick = () => {
 		//can't rely on any window events for this since were crossing like 5 processes and 23 threads
@@ -283,7 +280,10 @@ export function initIpcApi(ipcMain: IpcMain) {
 
 	ipcMain.handle("capture", (e: any, x: any, y: any, width: any, height: any) => {
 		let client = expectPermittedRsClient(e);
-		return native.captureWindowMulti(client.window.handle, settings.captureMode, { main: { x, y, width, height } }).main;
+		let capt = native.captureWindowMulti(client.window.handle, settings.captureMode, { main: { x, y, width, height } });
+		let data: ImageData = imageDataFrom(capt.main, width, height);
+		debugSaveImageData(data);
+		return capt.main;
 	});
 
 	ipcMain.handle("capturemulti", (e, rects: { [key: string]: Rectangle }) => {

@@ -7,6 +7,7 @@
 
 #import "AOUtil.h"
 #import "AOTrackedEvent.h"
+#include "../util.h"
 
 @interface AOUtil()
 + (void (^)(void)) createEventBlocks;
@@ -761,137 +762,60 @@ static bool rightMouseDown = false;
     return id;
 }
 
-+ (CGFloat) getTitlebarHeight:(int)pid forWindowID:(CGWindowID)windowID {
-    AXUIElementRef appRef = AXUIElementCreateApplication(pid);
-    CFArrayRef windowList;
-    
-    // Get all windows for the process
-    if (AXUIElementCopyAttributeValue(appRef, kAXWindowsAttribute, (CFTypeRef *)&windowList) == kAXErrorSuccess) {
-        for (CFIndex i = 0; i < CFArrayGetCount(windowList); i++) {
-            AXUIElementRef winRef = (AXUIElementRef)CFArrayGetValueAtIndex(windowList, i);
-            
-            // Note: In a production app, you'd match the windowID or Title here.
-            // For now, we assume the main window or compare frames.
-            CFTypeRef positionRef, sizeRef;
-            AXUIElementCopyAttributeValue(winRef, kAXPositionAttribute, &positionRef);
-            AXUIElementCopyAttributeValue(winRef, kAXSizeAttribute, &sizeRef);
-            
-            // Get the "Content" area of this specific window
-            AXUIElementRef contentRef;
-            if (AXUIElementCopyAttributeValue(winRef, kAXContentsAttribute, (CFTypeRef *)&contentRef) == kAXErrorSuccess) {
-                CFTypeRef contentPosRef;
-                AXUIElementCopyAttributeValue(contentRef, kAXPositionAttribute, &contentPosRef);
-                
-                CGPoint winPos, contentPos;
-                AXValueGetValue((AXValueRef)positionRef, (AXValueType)kAXValueCGPointType, &winPos);
-                AXValueGetValue((AXValueRef)contentPosRef, (AXValueType)kAXValueCGPointType, &contentPos);
-                
-                CFRelease(contentRef);
-                // The difference is the titlebar height
-                return contentPos.y - winPos.y; 
-            }
-        }
-    }
-    // Fallback for standard macOS titlebars if Accessibility fails
-    return 28.0; 
-}
-
-+(void) capture:(OSWindow) wnd withRects: (vector <CaptureRect>) rects {
++(void) capture:(OSWindow) wnd withRects: (vector<CaptureRect>) rects {
     CFDictionaryRef windowInfo = [AOUtil findWindow: wnd.handle.winid];
     if (windowInfo == nullptr) {
         printf("window nil - something changed!\n");
         return;
     }
-    CFNumberRef windowIDRef = (CFNumberRef)CFDictionaryGetValue(windowInfo, kCGWindowNumber);
-    if (!windowIDRef) return;
 
-    CGWindowID windowID;
-    CFNumberGetValue(windowIDRef, kCFNumberSInt32Type, &windowID);
-
-    // Get window bounds from the dictionary
-    CFDictionaryRef boundsDict = (CFDictionaryRef)CFDictionaryGetValue(windowInfo, kCGWindowBounds);
-    if (!boundsDict) return;
-
-    CGRect windowBounds;
-    CGRectMakeWithDictionaryRepresentation(boundsDict, &windowBounds);
-
-    // Build a window array for capture
-    CFArrayRef windowArray = CFArrayCreate(
-        kCFAllocatorDefault,
-        (const void**)&windowID,
-        1,
-        NULL
+    CGWindowID windowId = static_cast<CGWindowID>(wnd.handle.winid);
+    
+    // Capture entire window at once, content area only (no titlebar)
+    CGImageRef fullCapture = CGWindowListCreateImage(
+        CGRectNull,
+        kCGWindowListOptionIncludingWindow,
+        windowId,
+        kCGWindowImageNominalResolution | kCGWindowImageBoundsIgnoreFraming
     );
-    if (!windowArray) return;
+    if (!fullCapture) return;
 
-    for (CaptureRect &rect : rects) {
-        // Build the subrect relative to the window's screen position
-        CGRect captureRect = CGRectMake(
-            windowBounds.origin.x + rect.rect.x,
-            windowBounds.origin.y + rect.rect.y,
-            rect.rect.width,
-            rect.rect.height
-        );
+    for (auto& rect : rects) {
+        CGRect cropRect = CGRectMake(rect.rect.x, rect.rect.y, rect.rect.width, rect.rect.height);
+        CGImageRef cropped = CGImageCreateWithImageInRect(fullCapture, cropRect);
+        if (!cropped) continue;
 
-        // Capture just the specified window, clipped to captureRect
-        CGImageRef image = CGWindowListCreateImageFromArray(
-            captureRect,
-            windowArray,
-            kCGWindowImageBoundsIgnoreFraming
-        );
+        // Redraw into a known color space
+        CGImageRef redrawn = [AOUtil redrawImage:cropped]; // releases cropped internally
 
-        if (image != NULL) {
-            [AOUtil captureImageFile:image withFilename:@"/tmp/alt1_capture.png"];
-        }
+        size_t width = CGImageGetWidth(redrawn);
+        size_t height = CGImageGetHeight(redrawn);
+        size_t bytesPerRow = width * 4;
 
-        if (!image) continue;
-
-        size_t width  = CGImageGetWidth(image);
-        size_t height = CGImageGetHeight(image);
-        size_t bytesPerRow = width * 4; // BGRA
-
-        // Sanity check against provided buffer size
         if (bytesPerRow * height > rect.size) {
-            CGImageRelease(image);
+            CGImageRelease(redrawn);
             continue;
         }
 
         CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-
-	CGContextRef ctx = CGBitmapContextCreate(
-	    rect.data,
-	    width,
-	    height,
-	    8,
-	    bytesPerRow,
-	    colorSpace,
-	    kCGImageAlphaNoneSkipFirst | kCGBitmapByteOrder32Little // BGRA, no alpha math
-	);
-
-	if (ctx) {
-	    CGContextDrawImage(ctx, CGRectMake(0, 0, width, height), image);
-	    CGContextRelease(ctx);
-
-	    // Flip BGRA -> RGBA and force alpha to 255 (same as Windows code)
-	    uint8_t* px = (uint8_t*)rect.data;
-	    size_t pixelCount = width * height;
-	    for (size_t i = 0; i < pixelCount; i++, px += 4) {
-		uint8_t b = px[0];
-		uint8_t g = px[1];
-		uint8_t r = px[2];
-		// px[3] is alpha, discard it
-		px[0] = r;
-		px[1] = g;
-		px[2] = b;
-		px[3] = 255; // fillImageOpaque equivalent
-	    }
-	}
-
+        CGContextRef ctx = CGBitmapContextCreate(
+            rect.data, width, height, 8, bytesPerRow, colorSpace,
+            kCGImageAlphaNoneSkipFirst | kCGBitmapByteOrder32Little
+        );
         CGColorSpaceRelease(colorSpace);
-        CGImageRelease(image);
+
+        if (ctx) {
+            CGContextDrawImage(ctx, CGRectMake(0, 0, width, height), redrawn);
+            CGContextRelease(ctx);
+            size_t len = width * height * 4;
+            flipBGRAtoRGBA(rect.data, len);
+            fillImageOpaque(rect.data, len);
+          }
+
+        CGImageRelease(redrawn);
     }
 
-    CFRelease(windowArray);
+    CGImageRelease(fullCapture);
 }
 
 /*
