@@ -22,6 +22,16 @@
 
 using namespace priv_os_x11;
 
+static constexpr auto rsName = "RuneScape";
+constexpr auto protonName = "steam_proton";
+
+static constexpr std::array<std::string_view, 4> rsClassNames = {
+	rsName,
+	"steam_app_1343400",
+	"rs2client.exe",
+	protonName,
+};
+
 struct TrackedEvent {
 	xcb_window_t window;
 	WindowEventType type;
@@ -237,71 +247,86 @@ std::string GetProcessName(const xcb_window_t window)
 	return name;
 }
 
+/* The invisible windows should return unmapped.
+ * The only danger here is that the launcher window does not return unmapped until the actual client has started,
+ * and the launcher itself is closed.
+ *
+ * Note: NOT Jagex Launcher, but the small RS launcher window with the graphics mode settings button.
+ * */
+bool IsViewable(const xcb_window_t window)
+{
+	const auto cookie = xcb_get_window_attributes(connection, window);
+	std::unique_ptr<xcb_get_window_attributes_reply_t, decltype(&free)> reply{
+		xcb_get_window_attributes_reply(connection, cookie, nullptr), &free
+	};
+	if (!reply)
+		return false;
+	return reply->map_state != XCB_MAP_STATE_UNMAPPED;
+}
+
+bool IsRsWindowProperties(std::string title, std::string classname, std::string processName)
+{
+	if (processName == "" || title == "")
+		return false;
+	auto it = std::find_if(rsClassNames.begin(), rsClassNames.end(), [&](std::string_view s) {
+		return (title.compare(0, strlen(rsName), rsName) == 0) && (s == classname) &&
+		       (processName.compare(0, strlen("rs2"), "rs2") == 0);
+	});
+	return it != rsClassNames.end();
+}
+
 bool IsRsWindow(const xcb_window_t window)
 {
 	ensureConnection();
-	constexpr uint32_t long_length =
-		64;   // Any length higher than 2x+3 of the longest string we may match is fine
 	// Check window class (WM_CLASS property); this is set by the application controlling the window
 	// Also check WM_TRANSIENT_FOR is not set, this will be set on things like popups
-	xcb_get_property_cookie_t cookieProp = xcb_get_property(
-		connection, 0, window, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 0, long_length);
-	xcb_get_property_cookie_t cookieTransient = xcb_get_property(
-		connection, 0, window, XCB_ATOM_WM_TRANSIENT_FOR, XCB_ATOM_WINDOW, 0, long_length);
-	xcb_get_property_reply_t *replyProp = xcb_get_property_reply(connection, cookieProp, NULL);
-	if (replyProp != NULL) {
-		auto len = xcb_get_property_value_length(replyProp);
-		// if len == long_length then that means we didn't read the whole property, so discard.
-		if (len > 0 && (uint32_t)len < long_length) {
-			char buffer[long_length] = { 0 };
-			memcpy(buffer, xcb_get_property_value(replyProp), len);
-			// first is instance name, then class name - both null terminated. we want class name.
-			const char *classname = buffer + strlen(buffer) + 1;
-			if (strcmp(classname, "RuneScape") == 0 ||
-				strcmp(classname, "steam_app_1343400") == 0 ||
-				strcmp(classname, "steam_proton") == 0 ||
-				strcmp(classname, "rs2client.exe") == 0) {
-				auto replyTransient =
-					xcb_get_property_reply(connection, cookieTransient, NULL);
-				xcb_get_property_cookie_t cookie =
-					xcb_get_property_unchecked(connection, 0, window,
-						XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 0, 100);
-				std::unique_ptr<xcb_get_property_reply_t, decltype(&free)> reply{
-					xcb_get_property_reply(connection, cookie, NULL), &free
-				};
-				if (reply) {
-					char *title = reinterpret_cast<char *>(
-						xcb_get_property_value(reply.get()));
-					int length = xcb_get_property_value_length(reply.get());
-					auto str_title = std::string(title, length);
-					/* Covers both normal and compatibility mode (substring of RuneScape (compatibility mode) )*/
-					if (str_title.compare(
-						    0, sizeof("RuneScape") - 1, "RuneScape") == 0) {
-						if (replyTransient &&
-							xcb_get_property_value_length(
-								replyTransient) == 0) {
-							// Game client window runs under the rs2client.exe process
-							auto processName = GetProcessName(window);
-							if (processName.compare(0,
-								    sizeof("rs2client") - 1,
-								    "rs2client") == 0) {
-								std::cout
-									<< "Found correct RuneScape window: "
-									<< str_title << std::endl;
-								free(replyProp);
-								return true;
-							}
-						} else {
-							std::cout << "NonTransient window found: "
-								  << str_title << std::endl;
-						}
-					}
+	const auto cookieClass =
+		xcb_get_property(connection, 0, window, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 0, 64);
+	const auto cookieTitle = xcb_get_property_unchecked(
+		connection, 0, window, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 0, 64);
+	const auto cookieTransient = xcb_get_property(
+		connection, 0, window, XCB_ATOM_WM_TRANSIENT_FOR, XCB_ATOM_WINDOW, 0, 64);
+	std::unique_ptr<xcb_get_property_reply_t, decltype(&free)> replyClass{
+		xcb_get_property_reply(connection, cookieClass, NULL), &free
+	};
+	if (replyClass) {
+		char *rsclass = reinterpret_cast<char *>(xcb_get_property_value(replyClass.get()));
+		int length = xcb_get_property_value_length(replyClass.get());
+		if (length == 0) {
+			return false;
+		}
+		auto classname = std::string(rsclass, length);
+		auto first = strlen(rsclass);
+		classname = classname.substr(first + 1, length - first - 2);
+		std::unique_ptr<xcb_get_property_reply_t, decltype(&free)> replyTitle{
+			xcb_get_property_reply(connection, cookieTitle, NULL), &free
+		};
+		if (replyTitle) {
+			char *title =
+				reinterpret_cast<char *>(xcb_get_property_value(replyTitle.get()));
+			int length = xcb_get_property_value_length(replyTitle.get());
+			auto str_title = std::string(title, length);
+			std::unique_ptr<xcb_get_property_reply_t, decltype(&free)> replyTransient{
+				xcb_get_property_reply(connection, cookieTransient, NULL), &free
+			};
+			auto processName = GetProcessName(window);
+			// workaround for bolt launcher using flatpak
+			if (processName.find("kworker") != std::string::npos)
+				processName = "rs2client";
+			if (IsViewable(window) &&
+				IsRsWindowProperties(str_title, classname, processName)) {
+				if (replyTransient &&
+					xcb_get_property_value_length(replyTransient.get()) == 0) {
+					std::cout << "Found correct RuneScape window: " << str_title
+						  << std::endl;
+					return true;
+				} else {
+					std::cout << "NonTransient window found: " << str_title
+						  << std::endl;
 				}
 			}
 		}
 	}
-
-	free(replyProp);
 	return false;
 }
 
