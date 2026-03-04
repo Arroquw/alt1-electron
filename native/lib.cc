@@ -1,19 +1,17 @@
 #include "jsapi.h"
 
-static void FinalizePluginInstance(Napi::Env /*env*/, PluginInstance* data) {
+static void FinalizePluginInstance(Napi::Env /*env*/, PluginInstance *data)
+{
 	delete data;
 }
 
-Napi::Object Init(Napi::Env env, Napi::Object exports) {
-	auto* inst = new PluginInstance();
+Napi::Object Init(Napi::Env env, Napi::Object exports)
+{
+	auto *inst = new PluginInstance();
 
 	env.SetInstanceData<PluginInstance, FinalizePluginInstance>(inst);
 
-	napi_add_env_cleanup_hook(
-		env,
-		[](void*) { OSShutdownX11(); },
-		nullptr
-	);
+	napi_add_env_cleanup_hook(env, [](void *) { OSShutdownX11(); }, nullptr);
 
 	exports.Set("captureWindowMulti", Napi::Function::New(env, CaptureWindowMulti));
 	exports.Set("getRsHandles", Napi::Function::New(env, GetRsHandles));

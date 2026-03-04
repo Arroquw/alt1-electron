@@ -2,16 +2,14 @@
 #include "os.h"
 #include "../libs/Alt1Native.h"
 
+inline const std::map<CaptureMode, std::string> captureModeText = { { CaptureMode::Desktop,
+									    "desktop" },
+	{ CaptureMode::Window, "window" }, { CaptureMode::OpenGL, "opengl" } };
 
-inline const std::map<CaptureMode, std::string> captureModeText = {
-	{CaptureMode::Desktop,"desktop"},
-	{CaptureMode::Window,"window"},
-	{CaptureMode::OpenGL,"opengl"}
-};
+inline std::map<OSWindow, Alt1Native::HookedProcess *> hookedWindows;
 
-inline std::map<OSWindow, Alt1Native::HookedProcess*> hookedWindows;
-
-Napi::Value HookWindow(const Napi::CallbackInfo& info) {
+Napi::Value HookWindow(const Napi::CallbackInfo &info)
+{
 #ifdef OPENGL_SUPPORTED
 	auto wnd = OSWindow::FromJsValue(info[0]);
 
@@ -23,7 +21,8 @@ Napi::Value HookWindow(const Napi::CallbackInfo& info) {
 #endif
 }
 
-Napi::Value CaptureWindowMulti(const Napi::CallbackInfo& info) {
+Napi::Value CaptureWindowMulti(const Napi::CallbackInfo &info)
+{
 	auto env = info.Env();
 	auto wnd = OSWindow::FromJsValue(info[0]);
 
@@ -49,12 +48,15 @@ Napi::Value CaptureWindowMulti(const Napi::CallbackInfo& info) {
 	auto ret = Napi::Object::New(env);
 	for (uint32_t a = 0; a < props.Length(); a++) {
 		auto key = props.Get(a);
-		if (!key.IsString() || !obj.HasOwnProperty(key)) { continue; }
+		if (!key.IsString() || !obj.HasOwnProperty(key)) {
+			continue;
+		}
 		auto val = obj.Get(key);
-		if (val.IsNull() || val.IsUndefined()) { continue; }
+		if (val.IsNull() || val.IsUndefined()) {
+			continue;
+		}
 		auto rect = JSRectangle::FromJsValue(val);
-		if (rect.width <= 0 || rect.height <= 0 || rect.width > 1e4 || rect.height > 1e4)
-		{
+		if (rect.width <= 0 || rect.height <= 0 || rect.width > 1e4 || rect.height > 1e4) {
 			throw Napi::TypeError::New(env, "invalid capture size");
 		}
 
@@ -69,14 +71,18 @@ Napi::Value CaptureWindowMulti(const Napi::CallbackInfo& info) {
 	return ret;
 }
 
-Napi::Value GetRsHandles(const Napi::CallbackInfo& info) {
+Napi::Value GetRsHandles(const Napi::CallbackInfo &info)
+{
 	auto handles = OSGetRsHandles();
 	auto ret = Napi::Array::New(info.Env(), handles.size());
-	for (size_t i = 0; i < handles.size(); i++) { ret.Set(i, handles[i].ToJS(info.Env())); }
+	for (size_t i = 0; i < handles.size(); i++) {
+		ret.Set(i, handles[i].ToJS(info.Env()));
+	}
 	return ret;
 }
 
-Napi::Value GetCursorScreenPoint(const Napi::CallbackInfo& info) {
+Napi::Value GetCursorScreenPoint(const Napi::CallbackInfo &info)
+{
 	auto env = info.Env();
 	JSPoint p = OSGetCursorScreenPoint();
 
@@ -86,19 +92,36 @@ Napi::Value GetCursorScreenPoint(const Napi::CallbackInfo& info) {
 	return out;
 }
 
-Napi::Value JSGetActiveWindow(const Napi::CallbackInfo& info) { return OSGetActiveWindow().ToJS(info.Env()); }
-Napi::Value GetWindowBounds(const Napi::CallbackInfo& info) { return OSWindow::FromJsValue(info[0]).GetBounds().ToJs(info.Env()); }
-Napi::Value GetClientBounds(const Napi::CallbackInfo& info) { return OSWindow::FromJsValue(info[0]).GetClientBounds().ToJs(info.Env()); }
-Napi::Value GetWindowTitle(const Napi::CallbackInfo& info) { return Napi::String::New(info.Env(), OSWindow::FromJsValue(info[0]).GetTitle()); }
-Napi::Value GetMouseState(const Napi::CallbackInfo& info) { return Napi::Boolean::New(info.Env(), OSGetMouseState()); }
+Napi::Value JSGetActiveWindow(const Napi::CallbackInfo &info)
+{
+	return OSGetActiveWindow().ToJS(info.Env());
+}
+Napi::Value GetWindowBounds(const Napi::CallbackInfo &info)
+{
+	return OSWindow::FromJsValue(info[0]).GetBounds().ToJs(info.Env());
+}
+Napi::Value GetClientBounds(const Napi::CallbackInfo &info)
+{
+	return OSWindow::FromJsValue(info[0]).GetClientBounds().ToJs(info.Env());
+}
+Napi::Value GetWindowTitle(const Napi::CallbackInfo &info)
+{
+	return Napi::String::New(info.Env(), OSWindow::FromJsValue(info[0]).GetTitle());
+}
+Napi::Value GetMouseState(const Napi::CallbackInfo &info)
+{
+	return Napi::Boolean::New(info.Env(), OSGetMouseState());
+}
 
-void SetWindowParent(const Napi::CallbackInfo& info) {
+void SetWindowParent(const Napi::CallbackInfo &info)
+{
 	auto wnd = OSWindow::FromJsValue(info[0]);
 	auto parent = OSWindow::FromJsValue(info[1]);
 	OSSetWindowParent(wnd, parent);
 }
 
-void SetWindowShape(const Napi::CallbackInfo& info) {
+void SetWindowShape(const Napi::CallbackInfo &info)
+{
 #ifdef OS_LINUX
 	auto arr = info[1].As<Napi::Array>();
 	std::vector<JSRectangle> rects;
@@ -108,11 +131,13 @@ void SetWindowShape(const Napi::CallbackInfo& info) {
 	}
 	OSSetWindowShape(OSWindow::FromJsValue(info[0]), rects);
 #else
-	throw Napi::Error::New(info.Env(), "SetWindowShape is not implemented on this operating system");
+	throw Napi::Error::New(
+		info.Env(), "SetWindowShape is not implemented on this operating system");
 #endif
 }
 
-void NewWindowListener(const Napi::CallbackInfo& info) {
+void NewWindowListener(const Napi::CallbackInfo &info)
+{
 	auto wnd = OSWindow::FromJsValue(info[0]);
 	auto typestring = info[1].As<Napi::String>().Utf8Value();
 	Napi::Function cb = info[2].As<Napi::Function>();
@@ -123,7 +148,8 @@ void NewWindowListener(const Napi::CallbackInfo& info) {
 	OSNewWindowListener(wnd, typefind->second, cb);
 }
 
-void RemoveWindowListener(const Napi::CallbackInfo& info) {
+void RemoveWindowListener(const Napi::CallbackInfo &info)
+{
 	auto wnd = OSWindow::FromJsValue(info[0]);
 	auto typestring = info[1].As<Napi::String>().Utf8Value();
 	Napi::Function cb = info[2].As<Napi::Function>();
@@ -134,7 +160,8 @@ void RemoveWindowListener(const Napi::CallbackInfo& info) {
 	OSRemoveWindowListener(wnd, typefind->second, cb);
 }
 
-Napi::Value Shutdown(const Napi::CallbackInfo& info) {
+Napi::Value Shutdown(const Napi::CallbackInfo &info)
+{
 	OSShutdownX11();
 	return info.Env().Undefined();
 }
