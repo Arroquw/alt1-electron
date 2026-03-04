@@ -5,6 +5,7 @@
 #include <xcb/composite.h>
 #include <xcb/record.h>
 #include <xcb/shape.h>
+#include <xcb/xcb_icccm.h>
 #include <stdint.h>
 #include <algorithm>
 #include <thread>
@@ -25,7 +26,7 @@ using namespace priv_os_x11;
 static constexpr auto rsName = "RuneScape";
 constexpr auto protonName = "steam_proton";
 
-static constexpr std::array<std::string_view, 4> rsClassNames = {
+static constexpr std::array<std::string_view, 5> rsClassNames = {
 	rsName,
 	"steam_app_1343400",
 	"rs2client.exe",
@@ -191,67 +192,45 @@ OSWindow OSWindow::FromJsValue(const Napi::Value jsval)
 	return OSWindow(handleint);
 }
 
-/**
- * Retrieves the name of the process associated with a window.
- * 
- * @param window Window to get the associated process name of.
- * @return Name of the process the window is associated with.
+/*
+ * @brief Checks if an xcb window has its size locked
+ *
+ * The game client itself does not lock its size, but all of the fake windows do.
+ *
+ * @param window The window to be checked
+ *
+ * @return true window has its size locked
+ * @return false window does not have its size locked
+ *
  */
-std::string GetProcessName(const xcb_window_t window)
+bool HasLockedSize(const xcb_window_t window)
 {
-	// Get the process ID atom
-	constexpr char pidTag[] = "_NET_WM_PID";
-	const auto pidCookie = xcb_intern_atom(connection, 0, strlen(pidTag), pidTag);
-	const auto pidReply = xcb_intern_atom_reply(connection, pidCookie, nullptr);
-
-	if (!pidReply) {
-		return "";
+	xcb_size_hints_t hints;
+	if (!xcb_icccm_get_wm_normal_hints_reply(connection,
+		    xcb_icccm_get_wm_normal_hints(connection, window), &hints, nullptr)) {
+		return false;
 	}
 
-	const auto pidAtom = pidReply->atom;
-	free(pidReply);
-
-	// Get the process ID property
-	const auto propCookie =
-		xcb_get_property(connection, 0, window, pidAtom, XCB_ATOM_CARDINAL, 0, 1);
-	const auto propReply = xcb_get_property_reply(connection, propCookie, nullptr);
-
-	if (!propReply) {
-		return "";
+	if ((hints.flags & XCB_ICCCM_SIZE_HINT_P_MIN_SIZE) &&
+		(hints.flags & XCB_ICCCM_SIZE_HINT_P_MAX_SIZE)) {
+		return hints.min_width == hints.max_width && hints.min_height == hints.max_height;
 	}
-
-	// Read the value from the process ID property
-	auto pid = 0u;
-
-	if (xcb_get_property_value_length(propReply) == 4) {
-		pid = *static_cast<uint32_t *>(xcb_get_property_value(propReply));
-	}
-
-	free(propReply);
-
-	if (pid == 0) {
-		return "";
-	}
-
-	// Read the process name from /proc/<pid>/comm
-	std::stringstream path;
-	path << "/proc/" << pid << "/comm";
-
-	std::ifstream file(path.str());
-	if (!file.is_open()) {
-		return "";
-	}
-
-	std::string name;
-	std::getline(file, name);
-	return name;
+	return false;
 }
 
-/* The invisible windows should return unmapped.
+/*
+ * @brief checks if the window is mapped or not
+ *
+ * The invisible windows should return unmapped.
  * The only danger here is that the launcher window does not return unmapped until the actual client has started,
- * and the launcher itself is closed.
+ * and the launcher itself is closed. Until that moment, it returns viewable.
  *
  * Note: NOT Jagex Launcher, but the small RS launcher window with the graphics mode settings button.
+ *
+ * @param window The window to check the viewable property on
+ *
+ * @return true window is not unmapped
+ * @return false window is unmapped
  * */
 bool IsViewable(const xcb_window_t window)
 {
@@ -264,22 +243,58 @@ bool IsViewable(const xcb_window_t window)
 	return reply->map_state != XCB_MAP_STATE_UNMAPPED;
 }
 
-bool IsRsWindowProperties(std::string title, std::string classname, std::string processName)
+/*
+* @brief Checks if the passed window properties belong to an RS window
+*
+* The rs3 client can have more than one classname,
+* so it is checked against preset values in rsClassNames
+*
+* @param title Title of the window to be checked
+* @param classname classname of the window to be checked
+*
+* @return true classname and title belong to an RS window
+* @return false no match for RS window
+*/
+bool IsRsWindowProperties(std::string title, std::string classname)
 {
-	if (processName == "" || title == "")
+	if (title == "")
 		return false;
 	auto it = std::find_if(rsClassNames.begin(), rsClassNames.end(), [&](std::string_view s) {
-		return (title.compare(0, strlen(rsName), rsName) == 0) && (s == classname) &&
-		       (processName.compare(0, strlen("rs2"), "rs2") == 0);
+		return (title.compare(0, strlen(rsName), rsName) == 0) && (s == classname);
 	});
 	return it != rsClassNames.end();
 }
 
+/*
+* @brief Checks if a window is an RS window
+*
+* This function bases the checks on the following window properties:
+* - classname and title conform to a RS string
+* - window has its viewable mapped property set
+* - window does NOT have its size locked
+* - window is not a transient window
+*
+* for debugging:
+*    for i in $(xdotool search "runescape|rs"); do
+*        printf "${i}:\n"
+*        printf "title: "
+*        xdotool getwindowname "${i}"
+*        printf "classname: "
+*        xdotool getwindowclassname "${i}"
+*        printf "processname: "
+*        ps -p $(xdotool getwindowpid "${i}") -o comm=
+*        xwininfo -all -id "${i}"
+*        echo "---"
+*    done
+*
+* @param window the window to check
+*
+* @return true window is an RS window
+* @return false window is NOT an RS window
+*/
 bool IsRsWindow(const xcb_window_t window)
 {
 	ensureConnection();
-	// Check window class (WM_CLASS property); this is set by the application controlling the window
-	// Also check WM_TRANSIENT_FOR is not set, this will be set on things like popups
 	const auto cookieClass =
 		xcb_get_property(connection, 0, window, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 0, 64);
 	const auto cookieTitle = xcb_get_property_unchecked(
@@ -309,12 +324,8 @@ bool IsRsWindow(const xcb_window_t window)
 			std::unique_ptr<xcb_get_property_reply_t, decltype(&free)> replyTransient{
 				xcb_get_property_reply(connection, cookieTransient, NULL), &free
 			};
-			auto processName = GetProcessName(window);
-			// workaround for bolt launcher using flatpak
-			if (processName.find("kworker") != std::string::npos)
-				processName = "rs2client";
-			if (IsViewable(window) &&
-				IsRsWindowProperties(str_title, classname, processName)) {
+			if (IsViewable(window) && IsRsWindowProperties(str_title, classname) &&
+				!HasLockedSize(window)) {
 				if (replyTransient &&
 					xcb_get_property_value_length(replyTransient.get()) == 0) {
 					std::cout << "Found correct RuneScape window: " << str_title
