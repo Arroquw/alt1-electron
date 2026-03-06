@@ -66,9 +66,8 @@
 			"output": "release"
 		},
 		"linux": {
-			"target": [
-				"AppImage"
-			],
+			"artifactName": "${productName}-${version}.${ext}",
+			"target": ["AppImage"],
 			"icon": "src/imgs/alt1icon_large.png",
 			"category": "Utility",
 			"protocols": [

@@ -29,6 +29,13 @@ jobs:
         with:
           node-version: 24
 
+      - name: Set nightly version
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          DATE=$(date +%Y%m%d%H%M)
+          # e.g. 0.0.1-nightly.20240306.abc1234
+          npm version "0.${DATE}.0-nightly" --no-git-tag-version
+
       - name: Build (no publish)
         run: |
           npm ci
