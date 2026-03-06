@@ -1,4 +1,4 @@
-name: PR Build Check
+name: CI Build Check
 
 on:
   pull_request:
@@ -9,17 +9,19 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  build-check:
     runs-on: ${{ matrix.os }}
+
     strategy:
       matrix:
         os: [ubuntu-latest]
+
     steps:
       - name: Check out Git repository
         uses: actions/checkout@v5
 
       - name: Install dependencies
-        run: sudo apt install libxcb-shm0-dev libxcb-composite0-dev libxcb-ewmh-dev libxcb-record0-dev libxcb-shape0-dev
+        run: sudo apt install pkg-config libxcb-shm0-dev libxcb-composite0-dev libxcb-ewmh-dev libxcb-record0-dev libxcb-shape0-dev
         if: matrix.os == 'ubuntu-latest'
 
       - name: Install Node.js, NPM
@@ -27,7 +29,7 @@ jobs:
         with:
           node-version: 24
 
-      - name: Build (no publish)
+      - name: Build and Package Verify
         run: |
           npm ci
           npm run build
