@@ -67,7 +67,13 @@
 		"linux": {
 			"target": ["AppImage"],
 			"icon": "src/imgs/alt1icon_large.png",
-			"category": "Utility"
+			"category": "Utility",
+			"protocols": [
+				{
+					"name": "alt1",
+					"schemes": ["alt1"]
+				}
+			]
 		},
 		"win": {
 			"target": [
