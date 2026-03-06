@@ -32,7 +32,7 @@ jobs:
       - name: Build (no publish)
         run: |
           npm ci
-          npm run build
+          npm run build -- --mode production
           npx electron-builder -l --publish never
 
       - name: Move nightly tag
