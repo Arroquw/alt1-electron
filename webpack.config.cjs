@@ -106,10 +106,7 @@ module.exports = (env = {}) => {
 				"appframe/index": "./appframe/index.tsx",
 				"appframe/alt1api": "./appframe/alt1api.ts",
 				"overlayframe/index": "./overlayframe/index.tsx",
-				"settings/index": {
-					import: "./settings/index.tsx",
-					dependOn: "appframe/alt1api"
-				},
+				"settings/index": "./settings/index.tsx",
 				"tooltip/index": "./tooltip/index.tsx",
 				"tests/index": "./tests/index.ts",
 			},
