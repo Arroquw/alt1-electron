@@ -11,10 +11,14 @@ import { AppConfig } from "./appconfig";
 export type AppPermission = UservarType<typeof checkPermission>;
 export type PinRect = UservarType<typeof checkPinRect>;
 export type Bookmark = UservarType<typeof checkBookmark>;
+export type UpdateCheck = UservarType<typeof checkForUpdates>;
 export type Settings = UservarType<typeof checkSettings>;
 
 var checkPermission = Checks.strenum({ "pixel": "Pixel", "overlay": "Overlay", "game": "Game Data" });
-var checkForUpdates = false;
+var checkForUpdates = Checks.obj({
+	checkOnStartup: Checks.bool(),
+	checkOnRsStart: Checks.bool(),
+});
 
 var checkPinRect = Checks.obj({
 	left: Checks.num(),
@@ -48,7 +52,7 @@ var checkBookmark = Checks.obj({
 var checkSettings = Checks.obj({
 	captureMode: Checks.strenum<CaptureMode>({ desktop: "Desktop", opengl: "OpenGL", window: "Window" }, "window"),
 	bookmarks: Checks.arr(checkBookmark),
-	checkForUpdates: Checks.bool(checkForUpdates)
+	checkForUpdates: checkForUpdates,
 });
 
 type SettingsEvents = {
@@ -152,7 +156,7 @@ class ManagedSettings extends TypedEmitter<SettingsEvents> {
 		return this.settings.checkForUpdates;
 	}
 
-	set checkForUpdates(check: boolean) {
+	set checkForUpdates(check: UpdateCheck) {
 		this.settings.checkForUpdates = check;
 		this.scheduleSave();
 		this.emit("changed");

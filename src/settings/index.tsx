@@ -1,5 +1,5 @@
 import { ipcRenderer, dialog } from "electron";
-import type { Settings, Bookmark } from "../settings";
+import type { Settings, Bookmark, UpdateCheck } from "../settings";
 import type { CaptureMode } from "../native";
 import * as React from "react";
 import * as ReactDom from "react-dom";
@@ -179,16 +179,32 @@ function CaptureSettings(props: { settings: Settings }) {
 }
 
 function GeneralSettings(p: { settings: Settings }) {
-	const [isChecked, setIsChecked] = React.useState(p.settings.checkForUpdates);
-	let change = () => {
-		setIsChecked(!isChecked);
-		ipcRenderer.invoke("setcheckupdates", !isChecked);
+	const [checkOnStartup, setCheckOnStartup] = React.useState(p.settings.checkForUpdates.checkOnStartup);
+	const [checkOnRsStart, setCheckOnRsStart] = React.useState(p.settings.checkForUpdates.checkOnRsStart);
+
+	let changeStartup = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const next = e.currentTarget.checked;
+		setCheckOnStartup(next);
+		ipcRenderer.invoke("setcheckupdates", { checkOnStartup: next, checkOnRsStart });
 	}
+
+	let changeRsStart = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const next = e.currentTarget.checked;
+		setCheckOnRsStart(next);
+		ipcRenderer.invoke("setcheckupdates", { checkOnStartup, checkOnRsStart: next });
+	}
+
 	return (
 		<React.Fragment>
 			<p></p>
 			<label>
-				<input type="checkbox" value="checkforupdates" name="updatecheck" onChange={change} checked={isChecked} />Check for Updates </label>
+				<input type="checkbox" onChange={changeStartup} checked={checkOnStartup} />
+				Check for Updates on startup
+			</label>
+			<label>
+				<input type="checkbox" onChange={changeRsStart} checked={checkOnRsStart} />
+				Check for Updates on starting RS
+			</label>
 		</React.Fragment>
 	);
 }

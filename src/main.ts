@@ -62,6 +62,9 @@ app.on("window-all-closed", () => {
 });
 
 app.once("ready", async () => {
+	if (settings.checkForUpdates.checkOnStartup) {
+		checkForUpdate();
+	}
 	if (process.platform === 'linux') {
 		registerProtocolHandlerLinux();
 	} else {
