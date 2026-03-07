@@ -68,7 +68,6 @@ app.once("ready", async () => {
 		registerProtocolHandler();
 	}
 	handleSchemeArgs(process.argv);
-	checkForUpdate();
 	if (!globalShortcut.register("Alt+1", alt1Pressed)) {
 		console.log("failed to register alt+1 hotkey");
 	}
@@ -128,7 +127,7 @@ async function checkForUpdate() {
 		});
 	});
 
-	autoUpdater.on("update-not-available", () => {
+	autoUpdater.on("update-not-available", () => { // TODO: Add as setting to settings window
 		dialog.showMessageBox({
 			type: "info",
 			title: "No updates",
@@ -178,7 +177,7 @@ function alt1Pressed() {
 	}
 }
 
-export function getAutoUpdater(): AppUpdater {
+function getAutoUpdater(): AppUpdater {
 	// Using destructuring to access autoUpdater due to the CommonJS module of 'electron-updater'.
 	// It is a workaround for ESM compatibility issues, see https://github.com/electron-userland/electron-builder/issues/7976.
 	const { autoUpdater } = require('electron-updater');
