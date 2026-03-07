@@ -1,0 +1,36 @@
+name: CI Build Check
+
+on:
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  build-check:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v5
+
+      - name: Install dependencies
+        run: sudo apt install pkg-config libxcb-icccm4-dev libxcb-shm0-dev libxcb-composite0-dev libxcb-ewmh-dev libxcb-record0-dev libxcb-shape0-dev
+        if: matrix.os == 'ubuntu-latest'
+
+      - name: Install Node.js, NPM
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Build and Package Verify
+        run: |
+          npm ci
+          npm run build -- --mode production
+          npx electron-builder -l --publish never
