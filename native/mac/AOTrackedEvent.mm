@@ -156,7 +156,7 @@
 - (NSString *)debugDescription
 {
 	return [NSString stringWithFormat:@"Event[%@, %d]", [AOTrackedEvent typeName:self->type],
-		self -> window];
+		self->window];
 }
 
 - (instancetype)initWith:(CGWindowID)w

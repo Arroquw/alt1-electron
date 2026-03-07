@@ -911,7 +911,8 @@ static bool rightMouseDown = false;
 
 	CGImageRef fullCapture =
 		CGWindowListCreateImage(CGRectNull, kCGWindowListOptionIncludingWindow, windowId,
-			kCGWindowImageNominalResolution | kCGWindowImageBoundsIgnoreFraming);
+			kCGWindowImageNominalResolution | kCGWindowImageBoundsIgnoreFraming |
+				kCGWindowImageShouldBeOpaque);
 	if (!fullCapture)
 		return;
 
@@ -932,9 +933,11 @@ static bool rightMouseDown = false;
 			continue;
 		}
 
-		CGColorSpaceRef colorSpace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+		CGDirectDisplayID displayID = CGMainDisplayID();
+		CGColorSpaceRef colorSpace = CGDisplayCopyColorSpace(displayID);
 		CGContextRef ctx = CGBitmapContextCreate(rect.data, width, height, 8, bytesPerRow,
-			colorSpace, kCGImageAlphaNoneSkipFirst | kCGBitmapByteOrder32Little);
+			colorSpace,
+			(CGBitmapInfo)(kCGImageAlphaNoneSkipFirst | kCGBitmapByteOrder32Little));
 		CGColorSpaceRelease(colorSpace);
 
 		if (ctx) {
