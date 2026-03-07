@@ -63,7 +63,8 @@
 						'<!@(<(pkg-config) --cflags xcb-shm)',
 						'<!@(<(pkg-config) --cflags xcb-composite)',
 						'<!@(<(pkg-config) --cflags xcb-record)',
-						'<!@(<(pkg-config) --cflags xcb-shape)'
+						'<!@(<(pkg-config) --cflags xcb-shape)',
+						'<!@(<(pkg-config) --cflags xcb-icccm)'
 					],
 					'ldflags': [
 						'<!@(<(pkg-config) --libs-only-L --libs-only-other xcb)',
@@ -71,7 +72,8 @@
 						'<!@(<(pkg-config) --libs-only-L --libs-only-other xcb-shm)',
 						'<!@(<(pkg-config) --libs-only-L --libs-only-other xcb-composite)',
 						'<!@(<(pkg-config) --libs-only-L --libs-only-other xcb-record)',
-						'<!@(<(pkg-config) --libs-only-L --libs-only-other xcb-shape)'
+						'<!@(<(pkg-config) --libs-only-L --libs-only-other xcb-shape)',
+						'<!@(<(pkg-config) --libs-only-L --libs-only-other xcb-icccm)'
 					],
 					'libraries': [
 						'<!@(<(pkg-config) --libs-only-l xcb)',
@@ -79,7 +81,8 @@
 						'<!@(<(pkg-config) --libs-only-l xcb-shm)',
 						'<!@(<(pkg-config) --libs-only-l xcb-composite)',
 						'<!@(<(pkg-config) --libs-only-l xcb-record)',
-						'<!@(<(pkg-config) --libs-only-l xcb-shape)'
+						'<!@(<(pkg-config) --libs-only-l xcb-shape)',
+						'<!@(<(pkg-config) --libs-only-l xcb-icccm)'
 					],
 					"cflags_cc": [ "-std=c++17" ],
 				}],

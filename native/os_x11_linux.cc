@@ -5,6 +5,7 @@
 #include <xcb/composite.h>
 #include <xcb/record.h>
 #include <xcb/shape.h>
+#include <xcb/xcb_icccm.h>
 #include <stdint.h>
 #include <algorithm>
 #include <thread>
@@ -21,6 +22,16 @@
 #include "util.h"
 
 using namespace priv_os_x11;
+
+static constexpr auto rsName = "RuneScape";
+static constexpr auto protonName = "steam_proton";
+
+static constexpr std::array<std::string_view, 4> rsClassNames = {
+	rsName,
+	"steam_app_1343400",
+	"rs2client.exe",
+	protonName,
+};
 
 struct TrackedEvent {
 	xcb_window_t window;
@@ -181,127 +192,152 @@ OSWindow OSWindow::FromJsValue(const Napi::Value jsval)
 	return OSWindow(handleint);
 }
 
-/**
- * Retrieves the name of the process associated with a window.
- * 
- * @param window Window to get the associated process name of.
- * @return Name of the process the window is associated with.
+/*
+ * @brief Checks if an xcb window has its size locked
+ *
+ * The game client itself does not lock its size, but all of the fake windows do.
+ *
+ * @param window The window to be checked
+ *
+ * @return true window has its size locked
+ * @return false window does not have its size locked
+ *
  */
-std::string GetProcessName(const xcb_window_t window)
+bool HasLockedSize(const xcb_window_t window)
 {
-	// Get the process ID atom
-	constexpr char pidTag[] = "_NET_WM_PID";
-	const auto pidCookie = xcb_intern_atom(connection, 0, strlen(pidTag), pidTag);
-	const auto pidReply = xcb_intern_atom_reply(connection, pidCookie, nullptr);
-
-	if (!pidReply) {
-		return "";
+	xcb_size_hints_t hints;
+	if (!xcb_icccm_get_wm_normal_hints_reply(connection,
+		    xcb_icccm_get_wm_normal_hints(connection, window), &hints, nullptr)) {
+		return false;
 	}
 
-	const auto pidAtom = pidReply->atom;
-	free(pidReply);
-
-	// Get the process ID property
-	const auto propCookie =
-		xcb_get_property(connection, 0, window, pidAtom, XCB_ATOM_CARDINAL, 0, 1);
-	const auto propReply = xcb_get_property_reply(connection, propCookie, nullptr);
-
-	if (!propReply) {
-		return "";
+	if ((hints.flags & XCB_ICCCM_SIZE_HINT_P_MIN_SIZE) &&
+		(hints.flags & XCB_ICCCM_SIZE_HINT_P_MAX_SIZE)) {
+		return hints.min_width == hints.max_width && hints.min_height == hints.max_height;
 	}
-
-	// Read the value from the process ID property
-	auto pid = 0u;
-
-	if (xcb_get_property_value_length(propReply) == 4) {
-		pid = *static_cast<uint32_t *>(xcb_get_property_value(propReply));
-	}
-
-	free(propReply);
-
-	if (pid == 0) {
-		return "";
-	}
-
-	// Read the process name from /proc/<pid>/comm
-	std::stringstream path;
-	path << "/proc/" << pid << "/comm";
-
-	std::ifstream file(path.str());
-	if (!file.is_open()) {
-		return "";
-	}
-
-	std::string name;
-	std::getline(file, name);
-	return name;
+	return false;
 }
 
+/*
+ * @brief checks if the window is mapped or not
+ *
+ * The invisible windows should return unmapped.
+ * The only danger here is that the launcher window does not return unmapped until the actual client has started,
+ * and the launcher itself is closed. Until that moment, it returns viewable.
+ *
+ * Note: NOT Jagex Launcher, but the small RS launcher window with the graphics mode settings button.
+ *
+ * @param window The window to check the viewable property on
+ *
+ * @return true window is not unmapped
+ * @return false window is unmapped
+ * */
+bool IsViewable(const xcb_window_t window)
+{
+	const auto cookie = xcb_get_window_attributes(connection, window);
+	std::unique_ptr<xcb_get_window_attributes_reply_t, decltype(&free)> reply{
+		xcb_get_window_attributes_reply(connection, cookie, nullptr), &free
+	};
+	if (!reply)
+		return false;
+	return reply->map_state != XCB_MAP_STATE_UNMAPPED;
+}
+
+/*
+* @brief Checks if the passed window properties belong to an RS window
+*
+* The rs3 client can have more than one classname,
+* so it is checked against preset values in rsClassNames
+*
+* @param title Title of the window to be checked
+* @param classname classname of the window to be checked
+*
+* @return true classname and title belong to an RS window
+* @return false no match for RS window
+*/
+bool IsRsWindowProperties(std::string title, std::string classname)
+{
+	if (title == "")
+		return false;
+	auto it = std::find_if(rsClassNames.begin(), rsClassNames.end(), [&](std::string_view s) {
+		return (title.compare(0, strlen(rsName), rsName) == 0) && (s == classname);
+	});
+	return it != rsClassNames.end();
+}
+
+/*
+* @brief Checks if a window is an RS window
+*
+* This function bases the checks on the following window properties:
+* - classname and title conform to a RS string
+* - window has its viewable mapped property set
+* - window does NOT have its size locked
+* - window is not a transient window
+*
+* for debugging:
+*    for i in $(xdotool search "runescape|rs"); do
+*        printf "${i}:\n"
+*        printf "title: "
+*        xdotool getwindowname "${i}"
+*        printf "classname: "
+*        xdotool getwindowclassname "${i}"
+*        printf "processname: "
+*        ps -p $(xdotool getwindowpid "${i}") -o comm=
+*        xwininfo -all -id "${i}"
+*        echo "---"
+*    done
+*
+* @param window the window to check
+*
+* @return true window is an RS window
+* @return false window is NOT an RS window
+*/
 bool IsRsWindow(const xcb_window_t window)
 {
 	ensureConnection();
-	constexpr uint32_t long_length =
-		64;   // Any length higher than 2x+3 of the longest string we may match is fine
-	// Check window class (WM_CLASS property); this is set by the application controlling the window
-	// Also check WM_TRANSIENT_FOR is not set, this will be set on things like popups
-	xcb_get_property_cookie_t cookieProp = xcb_get_property(
-		connection, 0, window, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 0, long_length);
-	xcb_get_property_cookie_t cookieTransient = xcb_get_property(
-		connection, 0, window, XCB_ATOM_WM_TRANSIENT_FOR, XCB_ATOM_WINDOW, 0, long_length);
-	xcb_get_property_reply_t *replyProp = xcb_get_property_reply(connection, cookieProp, NULL);
-	if (replyProp != NULL) {
-		auto len = xcb_get_property_value_length(replyProp);
-		// if len == long_length then that means we didn't read the whole property, so discard.
-		if (len > 0 && (uint32_t)len < long_length) {
-			char buffer[long_length] = { 0 };
-			memcpy(buffer, xcb_get_property_value(replyProp), len);
-			// first is instance name, then class name - both null terminated. we want class name.
-			const char *classname = buffer + strlen(buffer) + 1;
-			if (strcmp(classname, "RuneScape") == 0 ||
-				strcmp(classname, "steam_app_1343400") == 0 ||
-				strcmp(classname, "steam_proton") == 0 ||
-				strcmp(classname, "rs2client.exe") == 0) {
-				auto replyTransient =
-					xcb_get_property_reply(connection, cookieTransient, NULL);
-				xcb_get_property_cookie_t cookie =
-					xcb_get_property_unchecked(connection, 0, window,
-						XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 0, 100);
-				std::unique_ptr<xcb_get_property_reply_t, decltype(&free)> reply{
-					xcb_get_property_reply(connection, cookie, NULL), &free
-				};
-				if (reply) {
-					char *title = reinterpret_cast<char *>(
-						xcb_get_property_value(reply.get()));
-					int length = xcb_get_property_value_length(reply.get());
-					auto str_title = std::string(title, length);
-					/* Covers both normal and compatibility mode (substring of RuneScape (compatibility mode) )*/
-					if (str_title.compare(
-						    0, sizeof("RuneScape") - 1, "RuneScape") == 0) {
-						if (replyTransient &&
-							xcb_get_property_value_length(
-								replyTransient) == 0) {
-							// Game client window runs under the rs2client.exe process
-							auto processName = GetProcessName(window);
-							if (processName.compare(0,
-								    sizeof("rs2client") - 1,
-								    "rs2client") == 0) {
-								std::cout
-									<< "Found correct RuneScape window: "
-									<< str_title << std::endl;
-								free(replyProp);
-								return true;
-							}
-						} else {
-							std::cout << "NonTransient window found: "
-								  << str_title << std::endl;
-						}
-					}
+	const auto cookieClass =
+		xcb_get_property(connection, 0, window, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 0, 64);
+	const auto cookieTitle = xcb_get_property_unchecked(
+		connection, 0, window, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 0, 64);
+	const auto cookieTransient = xcb_get_property(
+		connection, 0, window, XCB_ATOM_WM_TRANSIENT_FOR, XCB_ATOM_WINDOW, 0, 64);
+	std::unique_ptr<xcb_get_property_reply_t, decltype(&free)> replyClass{
+		xcb_get_property_reply(connection, cookieClass, NULL), &free
+	};
+	if (replyClass) {
+		char *rsclass = reinterpret_cast<char *>(xcb_get_property_value(replyClass.get()));
+		int length = xcb_get_property_value_length(replyClass.get());
+		if (length == 0) {
+			return false;
+		}
+		auto classname = std::string(rsclass, length);
+		auto first = strlen(rsclass);
+		classname = classname.substr(first + 1, length - first - 2);
+		std::unique_ptr<xcb_get_property_reply_t, decltype(&free)> replyTitle{
+			xcb_get_property_reply(connection, cookieTitle, NULL), &free
+		};
+		if (replyTitle) {
+			char *title =
+				reinterpret_cast<char *>(xcb_get_property_value(replyTitle.get()));
+			int length = xcb_get_property_value_length(replyTitle.get());
+			auto str_title = std::string(title, length);
+			std::unique_ptr<xcb_get_property_reply_t, decltype(&free)> replyTransient{
+				xcb_get_property_reply(connection, cookieTransient, NULL), &free
+			};
+			if (IsViewable(window) && IsRsWindowProperties(str_title, classname) &&
+				!HasLockedSize(window)) {
+				if (replyTransient &&
+					xcb_get_property_value_length(replyTransient.get()) == 0) {
+					std::cout << "Found correct RuneScape window: " << str_title
+						  << std::endl;
+					return true;
+				} else {
+					std::cout << "NonTransient window found: " << str_title
+						  << std::endl;
 				}
 			}
 		}
 	}
-
-	free(replyProp);
 	return false;
 }
 
