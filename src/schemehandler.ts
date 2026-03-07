@@ -16,6 +16,7 @@ function takeRegex(str: string, reg: RegExp): [string, RegExpMatchArray] {
 }
 
 export function handleSchemeArgs(argv: string[]) {
+	console.log("handling scheme: ", argv);
 	if (argv[argv.length - 1].startsWith(schemestring)) {
 		handleSchemeCommand(argv[argv.length - 1]);
 	}
@@ -32,10 +33,12 @@ export async function handleSchemeCommand(url: string) {
 				let cnfurl = new URL(url);
 				let res: AppConfigImport = await fetch(cnfurl.href).then(r => readJsonWithBOM(r));
 				await settings.appconfig.installApp(cnfurl, res);
+				dialog.showMessageBox({ message: `App added: ${url}` });
 				break
 			case "openapp":
 				let app = settings.bookmarks.find(a => a.configUrl == url);
 				if (!app) { throw new UserError("app not found"); }
+				dialog.showMessageBox({ message: `Opening app: ${url}` });
 				openApp(app);
 				break;
 			default:

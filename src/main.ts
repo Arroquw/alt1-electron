@@ -11,6 +11,8 @@ import { AppPermission, Bookmark, settings } from "./settings";
 import { boundMethod } from "autobind-decorator";
 import * as remoteMain from "@electron/remote/main";
 import { initIpcApi } from "./ipcapi";
+import * as fs from "fs";
+import { execSync } from 'child_process';
 
 if (process.env.NODE_ENV === "development") {
 	patchImageDataShow();
@@ -38,18 +40,6 @@ const originalCwd = process.cwd();
 
 if (!app.requestSingleInstanceLock()) { app.exit(); }
 
-// protocol scheme
-// getApplicationInfoForProtocol is not defined on linux
-app.getApplicationInfoForProtocol?.(schemestring)
-	.then(info => console.log("current alt1 protocol handler:", info))
-	.catch(e => console.log("current alt1 protocol check failed ", e.message));
-if (app.setAsDefaultProtocolClient?.(schemestring, undefined, process.argv.filter(q => !q.startsWith("--inspect-brk")))) {
-	console.log(`protocol handler for ${schemestring} registered successfully`);
-} else {
-	console.log(`failed to register handler for ${schemestring}`)
-}
-handleSchemeArgs(process.argv);
-
 settings.loadOrFetch();
 settings.on("changed", () => {
 	for (let admin of selectAdminContexts()) {
@@ -69,7 +59,14 @@ app.on("second-instance", (e, argv, cwd) => handleSchemeArgs(argv));
 app.on("window-all-closed", () => {
 	// existance of this listener prevent electron default behavior of closing
 });
+
 app.once("ready", () => {
+	if (process.platform === 'linux') {
+		registerProtocolHandlerLinux();
+	} else {
+		registerProtocolHandler();
+	}
+	handleSchemeArgs(process.argv);
 	if (!globalShortcut.register("Alt+1", alt1Pressed)) {
 		console.log("failed to register alt+1 hotkey");
 	}
@@ -77,6 +74,41 @@ app.once("ready", () => {
 	initIpcApi(ipcMain);
 	initRsInstanceTracking();
 });
+
+function registerProtocolHandler() {
+	if (process.defaultApp) {
+		if (process.argv.length >= 2) {
+			app.setAsDefaultProtocolClient(schemestring, process.execPath, [path.resolve(process.argv[1])]);
+		}
+	} else {
+		app.setAsDefaultProtocolClient(schemestring);
+	}
+}
+
+function registerProtocolHandlerLinux() {
+	const appDir = process.env.APPDIR;
+	const execPath = process.env.APPIMAGE ?? process.execPath;
+	if (!appDir || !process.env.APPIMAGE) return;
+	console.log("execpath: ", execPath);
+
+	const appName = app.getName().toLowerCase();
+	const desktopDir = path.join(process.env.HOME!, '.local/share/applications');
+	const destPath = path.join(desktopDir, `${appName}.desktop`);
+
+	const srcPath = path.join(appDir, `${appName}.desktop`);
+	let contents = fs.readFileSync(srcPath, 'utf8');
+
+	contents = contents.replace(/^Exec=.*/m, `Exec=${execPath} %U`);
+
+	const existing = fs.existsSync(destPath) ? fs.readFileSync(destPath, 'utf8') : '';
+	if (existing === contents) return;
+
+	fs.mkdirSync(desktopDir, { recursive: true });
+	fs.writeFileSync(destPath, contents);
+	execSync(`xdg-mime default ${appName}.desktop x-scheme-handler/alt1`);
+	execSync(`update-desktop-database ${desktopDir}`);
+	console.log('Protocol handler registered');
+}
 
 function alt1Pressed() {
 	let rsinst = getRsInstanceFromWnd(getActiveWindow());

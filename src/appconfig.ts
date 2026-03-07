@@ -63,7 +63,7 @@ export class AppConfig extends TypedEmitter<AppConfigEvents> {
 
 	async installApp(url: URL, res: AppConfigImport) {
 		if (this.bookmarks.find(a => a.configUrl == url.href)) {
-			throw new UserError("App is already installed");
+			throw new UserError(`App is already installed: ${res.appName}`);
 		}
 		let config: Bookmark = {
 			appName: "",
@@ -83,7 +83,7 @@ export class AppConfig extends TypedEmitter<AppConfigEvents> {
 			lastRect: null,
 			wasOpen: false
 		};
-		
+
 		this.bookmarks.push(config);
 		await this.updateAppconfig(config, res);
 		return config;
@@ -92,7 +92,7 @@ export class AppConfig extends TypedEmitter<AppConfigEvents> {
 	private async updateAppconfig(prev: Bookmark, config: AppConfigImport) {
 		let entryurl = sameDomainResolve(prev.configUrl, config.appUrl);
 		let iconurl = sameDomainResolve(prev.configUrl, config.iconUrl);
-	
+
 		prev.appName = config.appName;
 		prev.description = config.description;
 		prev.appUrl = entryurl.href;
@@ -103,7 +103,7 @@ export class AppConfig extends TypedEmitter<AppConfigEvents> {
 		prev.maxHeight = config.maxHeight;
 		prev.defaultWidth = config.defaultWidth;
 		prev.defaultHeight = config.defaultHeight;
-	
+
 		await tryUpdateIcon(prev);
 		this.emit("changed");
 	}
