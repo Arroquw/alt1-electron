@@ -14,8 +14,8 @@
 NS_ASSUME_NONNULL_BEGIN
 
 @interface AONSWindowDelegate : NSObject <NSWindowDelegate>
-@property(assign, nonatomic) id <NSWindowDelegate> delegate;
-- (instancetype) initWithDelegate:(id<NSWindowDelegate>)otherDelegate;
+@property (assign, nonatomic) id<NSWindowDelegate> delegate;
+- (instancetype)initWithDelegate:(id<NSWindowDelegate>)otherDelegate;
 @end
 
 NS_ASSUME_NONNULL_END

@@ -26,35 +26,41 @@ using namespace std;
 NS_ASSUME_NONNULL_BEGIN
 
 @interface AOUtil : NSObject
-+ (BOOL) shouldBeOnTop;
-+ (BOOL) isFullScreen:(CGRect) bounds;
-+ (BOOL) macOSGetMouseState;
-+ (void) macOSNewWindowListener:(CGWindowID)window 
-                           type:(WindowEventType)type
-                           tsfn:(std::shared_ptr<Napi::ThreadSafeFunction>)tsfn
-                            ref:(std::shared_ptr<Napi::FunctionReference>)ref;
-+ (void) macOSRemoveWindowListener:(CGWindowID) window type: (WindowEventType) type callback: (Napi::Function) callback;
-+ (void) macOSSetParent:(OSWindow) parent forWindow: (OSWindow) wnd;
-+ (void) updateWindow:(NSWindow*) window;
++ (BOOL)shouldBeOnTop;
++ (BOOL)isFullScreen:(CGRect)bounds;
++ (BOOL)macOSGetMouseState;
++ (void)macOSNewWindowListener:(CGWindowID)window
+			  type:(WindowEventType)type
+			  tsfn:(std::shared_ptr<Napi::ThreadSafeFunction>)tsfn
+			   ref:(std::shared_ptr<Napi::FunctionReference>)ref;
++ (void)macOSRemoveWindowListener:(CGWindowID)window
+			     type:(WindowEventType)type
+			 callback:(Napi::Function)callback;
++ (void)macOSSetParent:(OSWindow)parent forWindow:(OSWindow)wnd;
++ (void)updateWindow:(NSWindow *)window;
 
-+ (pid_t) focusedPid;
-+ (pid_t) pidForWindow:(uintptr_t) winid;
-+ (CFDictionaryRef) findWindow:(uintptr_t) winid;
++ (pid_t)focusedPid;
++ (pid_t)pidForWindow:(uintptr_t)winid;
++ (CFDictionaryRef)findWindow:(uintptr_t)winid;
 
-+ (CGWindowID) appMainWindow:(pid_t)pid;
-+ (CGWindowID) appFocusedWindow:(pid_t)pid;
-+ (CGRect) appBounds:(pid_t) pid;
-+ (NSString *) appTitle:(pid_t) pid;
++ (CGWindowID)appMainWindow:(pid_t)pid;
++ (CGWindowID)appFocusedWindow:(pid_t)pid;
++ (CGRect)appBounds:(pid_t)pid;
++ (NSString *)appTitle:(pid_t)pid;
 
-+ (CGFloat) findScalingFactor: (CGDirectDisplayID) displayId;
-+ (CGDirectDisplayID) findScreenForRect: (CGRect) bounds;
++ (CGFloat)findScalingFactor:(CGDirectDisplayID)displayId;
++ (CGDirectDisplayID)findScreenForRect:(CGRect)bounds;
 
-+ (void) capture:(OSWindow)wnd withRects:(vector<CaptureRect>&)rects;
-+ (void) captureImageFile:(CGImageRef) imageRef withFilename: (NSString*)filename;
-+ (CGImageRef) redrawImage:(CGImageRef) image;
-+ (BOOL) drawImage:(CGImageRef) image ontoBuffer: (void *)theData withScale: (CGFloat) scale;
-+ (void) interceptDelegate:(NSWindow *)window;
-+ (BOOL) updateNotifications:(BOOL) add forObserver: (AXObserverRef) obs withAppRef: (AXUIElementRef) appRef withReferenceObj: (nullable void *)refcon withNotifications: (CFStringRef) notification, ...;
++ (void)capture:(OSWindow)wnd withRects:(vector<CaptureRect> &)rects;
++ (void)captureImageFile:(CGImageRef)imageRef withFilename:(NSString *)filename;
++ (CGImageRef)redrawImage:(CGImageRef)image;
++ (BOOL)drawImage:(CGImageRef)image ontoBuffer:(void *)theData withScale:(CGFloat)scale;
++ (void)interceptDelegate:(NSWindow *)window;
++ (BOOL)updateNotifications:(BOOL)add
+		forObserver:(AXObserverRef)obs
+		 withAppRef:(AXUIElementRef)appRef
+	   withReferenceObj:(nullable void *)refcon
+	  withNotifications:(CFStringRef)notification, ...;
 @end
 
 NS_ASSUME_NONNULL_END
