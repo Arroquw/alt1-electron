@@ -7,7 +7,7 @@ import { OverlayCommand, imageDataFrom } from "./shared";
 import { TypedEmitter } from "./typedemitter";
 import { boundMethod } from "autobind-decorator";
 import { AppPermission, settings } from "./settings";
-import { openApp, managedWindows, selectAppContexts } from "./main";
+import { openApp, managedWindows, selectAppContexts, checkForUpdate } from "./main";
 import { Alt1EventType, ImgRef, ImgRefData, PointLike, Rect, RectLike } from "alt1";
 import { readAnything } from "./readers/alt1reader";
 import RightClickReader from "./readers/rightclick";
@@ -135,6 +135,9 @@ export class RsInstance extends TypedEmitter<RsInstanceEvents> {
 
 		rsInstances.push(this);
 		console.log(`new rs client tracked with handle: ${this.window.handle}`);
+		if (settings.checkForUpdates) {
+			checkForUpdate();
+		}
 	}
 
 	closeOverlayFrame(frameid: number) {

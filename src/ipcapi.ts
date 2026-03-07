@@ -350,5 +350,11 @@ export function initIpcApi(ipcMain: IpcMain) {
 		if (isAdmin(e)) {
 			settings.captureMode = newmode;
 		}
-	})
+	});
+
+	ipcMain.handle("setcheckupdates", (e, check) => {
+		if (isAdmin(e)) {
+			settings.checkForUpdates = check;
+		}
+	});
 }

@@ -111,7 +111,7 @@ function registerProtocolHandlerLinux() {
 	console.log('Protocol handler registered');
 }
 
-async function checkForUpdate() {
+export async function checkForUpdate() {
 	const autoUpdater = getAutoUpdater();
 
 	autoUpdater.on("update-available", (info) => {

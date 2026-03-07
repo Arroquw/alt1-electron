@@ -14,6 +14,7 @@ export type Bookmark = UservarType<typeof checkBookmark>;
 export type Settings = UservarType<typeof checkSettings>;
 
 var checkPermission = Checks.strenum({ "pixel": "Pixel", "overlay": "Overlay", "game": "Game Data" });
+var checkForUpdates = false;
 
 var checkPinRect = Checks.obj({
 	left: Checks.num(),
@@ -46,7 +47,8 @@ var checkBookmark = Checks.obj({
 
 var checkSettings = Checks.obj({
 	captureMode: Checks.strenum<CaptureMode>({ desktop: "Desktop", opengl: "OpenGL", window: "Window" }, "window"),
-	bookmarks: Checks.arr(checkBookmark)
+	bookmarks: Checks.arr(checkBookmark),
+	checkForUpdates: Checks.bool(checkForUpdates)
 });
 
 type SettingsEvents = {
@@ -146,10 +148,19 @@ class ManagedSettings extends TypedEmitter<SettingsEvents> {
 		fs.writeFileSync(this.path, data, { encoding: "utf8" });
 	}
 
+	get checkForUpdates() {
+		return this.settings.checkForUpdates;
+	}
+
+	set checkForUpdates(check: boolean) {
+		this.settings.checkForUpdates = check;
+		this.scheduleSave();
+		this.emit("changed");
+	}
+
 	get captureMode() {
 		return this.settings.captureMode;
 	}
-
 
 	set captureMode(mode: CaptureMode) {
 		if (!Object.keys(checkSettings.props.captureMode.opts).includes(mode)) {
