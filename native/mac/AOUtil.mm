@@ -907,10 +907,8 @@ static bool rightMouseDown = false;
 		printf("window nil - something changed!\n");
 		return;
 	}
-
 	CGWindowID windowId = static_cast<CGWindowID>(wnd.handle.winid);
 
-	// Capture entire window at once, content area only (no titlebar)
 	CGImageRef fullCapture =
 		CGWindowListCreateImage(CGRectNull, kCGWindowListOptionIncludingWindow, windowId,
 			kCGWindowImageNominalResolution | kCGWindowImageBoundsIgnoreFraming);
@@ -924,39 +922,29 @@ static bool rightMouseDown = false;
 		if (!cropped)
 			continue;
 
-		// Redraw into a known color space
-		CGImageRef redrawn = [AOUtil redrawImage:cropped];   // releases cropped internally
-
-		size_t width = CGImageGetWidth(redrawn);
-		size_t height = CGImageGetHeight(redrawn);
+		size_t width = CGImageGetWidth(cropped);
+		size_t height = CGImageGetHeight(cropped);
 		size_t bytesPerRow = width * 4;
+		size_t len = bytesPerRow * height;
 
-		printf("rect requested: %dx%d (size=%zu)\n", rect.rect.width, rect.rect.height,
-			rect.size);
-		printf("redrawn image: %zux%zu bytesPerRow=%zu total=%zu\n", width, height,
-			bytesPerRow, bytesPerRow * height);
-		if (bytesPerRow * height > rect.size) {
-			printf("SKIPPING: buffer too small\n");
-			CGImageRelease(redrawn);
+		if (len > rect.size) {
+			CGImageRelease(cropped);
 			continue;
 		}
 
-		CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+		CGColorSpaceRef colorSpace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
 		CGContextRef ctx = CGBitmapContextCreate(rect.data, width, height, 8, bytesPerRow,
 			colorSpace, kCGImageAlphaNoneSkipFirst | kCGBitmapByteOrder32Little);
 		CGColorSpaceRelease(colorSpace);
 
 		if (ctx) {
-			CGContextDrawImage(ctx, CGRectMake(0, 0, width, height), redrawn);
+			CGContextDrawImage(ctx, CGRectMake(0, 0, width, height), cropped);
 			CGContextRelease(ctx);
-			size_t len = width * height * 4;
 			flipBGRAtoRGBA(rect.data, len);
 			fillImageOpaque(rect.data, len);
 		}
-
-		CGImageRelease(redrawn);
+		CGImageRelease(cropped);
 	}
-
 	CGImageRelease(fullCapture);
 }
 
@@ -967,17 +955,14 @@ static bool rightMouseDown = false;
 {
 	size_t width = CGImageGetWidth(image);
 	size_t height = CGImageGetHeight(image);
-	// redraw with sRGB
 	CGColorSpaceRef colorspace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
-	CGContextRef context = CGBitmapContextCreate(
-		NULL, width, height, 8, width * 4, colorspace, kCGImageAlphaPremultipliedLast);
+	CGContextRef context = CGBitmapContextCreate(NULL, width, height, 8, width * 4, colorspace,
+		kCGImageAlphaNoneSkipFirst | kCGBitmapByteOrder32Little);
 	CGColorSpaceRelease(colorspace);
 	if (context == NULL)
 		return nil;
 	CGContextSetInterpolationQuality(context, kCGInterpolationNone);
-	// draw image to context (resizing it)
 	CGContextDrawImage(context, CGRectMake(0, 0, width, height), image);
-	// extract resulting image from context
 	CGImageRef imgRef = CGBitmapContextCreateImage(context);
 	CGContextRelease(context);
 	CGImageRelease(image);
