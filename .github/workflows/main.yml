@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Install dependencies
-        run: sudo apt install pkg-config libxcb-icccm4 libxcb-shm0-dev libxcb-composite0-dev libxcb-ewmh-dev libxcb-record0-dev libxcb-shape0-dev 
+        run: sudo apt install pkg-config libxcb-icccm4-dev libxcb-shm0-dev libxcb-composite0-dev libxcb-ewmh-dev libxcb-record0-dev libxcb-shape0-dev 
         if: matrix.os == 'ubuntu-latest'
 
       - name: Install Node.js, NPM
