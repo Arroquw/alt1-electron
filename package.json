@@ -12,6 +12,7 @@
 		"dist:darwin": "electron-builder -m",
 		"dist:linux": "electron-builder -l",
 		"dist:win32": "electron-builder -w",
+		"format": "find native \\( -iname '*.cc' -o -iname '*.mm' -o -iname '*.h' \\) | xargs clang-format -style=file -i",
 		"install": "npm run native",
 		"postinstall": "electron-builder install-app-deps",
 		"native": "npm run nativerelease -- --debug",
@@ -67,7 +68,9 @@
 		},
 		"linux": {
 			"artifactName": "${productName}-${version}.${ext}",
-			"target": ["AppImage"],
+			"target": [
+				"AppImage"
+			],
 			"icon": "src/imgs/alt1icon_large.png",
 			"category": "Utility",
 			"protocols": [
