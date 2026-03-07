@@ -21,21 +21,24 @@
 #define DEFAULT_OSRAWWINDOW 0
 #endif
 
-
 struct CaptureRect {
 	JSRectangle rect;
-	void* data;
+	void *data;
 	size_t size;
-	CaptureRect(void* data, size_t size, JSRectangle rect) :rect(rect), data(data), size(size) {}
+	CaptureRect(void *data, size_t size, JSRectangle rect) : rect(rect), data(data), size(size)
+	{
+	}
 };
-
 
 //TODO parameter type of objectwrap
 struct OSWindow {
 	OSRawWindow handle = DEFAULT_OSRAWWINDOW;
-public:
+
+    public:
 	OSWindow() = default;
-	OSWindow(OSRawWindow hnd) : handle(hnd) {}
+	OSWindow(OSRawWindow hnd) : handle(hnd)
+	{
+	}
 	// The bounderies of the window including title bar and borders in screen coordinates
 	JSRectangle GetBounds();
 	// The boundaries of the client area of the window, without any title bar of borders
@@ -49,8 +52,8 @@ public:
 	// Check if the value is of correct type and convert it to an OSWindow
 	static OSWindow FromJsValue(const Napi::Value jsval);
 
-	bool operator==(const OSWindow& other) const;
-	bool operator<(const OSWindow& other) const;
+	bool operator==(const OSWindow &other) const;
+	bool operator<(const OSWindow &other) const;
 };
 
 /**
@@ -89,15 +92,10 @@ JSPoint OSGetCursorScreenPoint();
  */
 bool OSGetMouseState();
 
-
 enum class WindowEventType { Move, Close, Show, Click, MouseMove };
-const std::map<std::string, WindowEventType> windowEventTypes = {
-	{"move",WindowEventType::Move},
-	{"close",WindowEventType::Close},
-	{"show",WindowEventType::Show},
-	{"click",WindowEventType::Click},
-	{"mousemove",WindowEventType::MouseMove}
-};
+const std::map<std::string, WindowEventType> windowEventTypes = { { "move", WindowEventType::Move },
+	{ "close", WindowEventType::Close }, { "show", WindowEventType::Show },
+	{ "click", WindowEventType::Click }, { "mousemove", WindowEventType::MouseMove } };
 
 /**
  * Listen for window events in windows owned by another process or the desktop.
@@ -120,5 +118,7 @@ void OSSetWindowShape(OSWindow wnd, vector<JSRectangle> rects);
 #if defined(OS_LINUX)
 void OSShutdownX11();
 #else
-inline void OSShutdownX11() {}
+inline void OSShutdownX11()
+{
+}
 #endif

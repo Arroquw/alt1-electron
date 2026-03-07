@@ -12,6 +12,7 @@
 		"dist:linux": "electron-builder -l",
 		"dist:darwin": "electron-builder -m",
 		"dist:win32": "electron-builder -w",
+		"format": "find native \\( -iname '*.cc' -o -iname '*.mm' -o -iname '*.h' \\) | xargs clang-format -style=file -i",
 		"install": "npm run native",
 		"postinstall": "electron-builder install-app-deps",
 		"native": "npm run nativerelease -- --debug",

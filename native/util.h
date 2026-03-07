@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include <napi.h>
 #include <string>
 #include <vector>
@@ -37,8 +36,11 @@ struct JSRectangle {
 	int width;
 	int height;
 	JSRectangle() = default;
-	JSRectangle(int x, int y, int w, int h) :x(x), y(y), width(w), height(h) {}
-	Napi::Object ToJs(Napi::Env env) const {
+	JSRectangle(int x, int y, int w, int h) : x(x), y(y), width(w), height(h)
+	{
+	}
+	Napi::Object ToJs(Napi::Env env) const
+	{
 		auto ret = Napi::Object::New(env);
 		ret.Set("x", x);
 		ret.Set("y", y);
@@ -46,7 +48,8 @@ struct JSRectangle {
 		ret.Set("height", height);
 		return ret;
 	}
-	static JSRectangle FromJsValue(const Napi::Value& val) {
+	static JSRectangle FromJsValue(const Napi::Value &val)
+	{
 		auto rect = val.As<Napi::Object>();
 		int x = rect.Get("x").As<Napi::Number>().Int32Value();
 		int y = rect.Get("y").As<Napi::Number>().Int32Value();
@@ -60,8 +63,11 @@ struct JSPoint {
 	int x;
 	int y;
 	JSPoint() = default;
-	JSPoint(int x, int y) :x(x), y(y) {}
-	Napi::Object ToJs(Napi::Env env) const {
+	JSPoint(int x, int y) : x(x), y(y)
+	{
+	}
+	Napi::Object ToJs(Napi::Env env) const
+	{
 		auto ret = Napi::Object::New(env);
 		ret.Set("x", x);
 		ret.Set("y", y);
@@ -69,6 +75,6 @@ struct JSPoint {
 	}
 };
 
-void fillImageOpaque(void* data, size_t len);
-void flipBGRAtoRGBA(void* data, size_t len);
-void flipBGRAtoRGBA(void* outdata, void* indata, size_t len);
+void fillImageOpaque(void *data, size_t len);
+void flipBGRAtoRGBA(void *data, size_t len);
+void flipBGRAtoRGBA(void *outdata, void *indata, size_t len);
