@@ -33,12 +33,12 @@ export async function handleSchemeCommand(url: string) {
 				let cnfurl = new URL(url);
 				let res: AppConfigImport = await fetch(cnfurl.href).then(r => readJsonWithBOM(r));
 				await settings.appconfig.installApp(cnfurl, res);
-				dialog.showErrorBox('App added: ', `${url}`)
+				dialog.showMessageBox({ message: `App added: ${url}` });
 				break
 			case "openapp":
 				let app = settings.bookmarks.find(a => a.configUrl == url);
 				if (!app) { throw new UserError("app not found"); }
-				dialog.showErrorBox('Opening app: ', `${url}`)
+				dialog.showMessageBox({ message: `Opening app: ${url}` });
 				openApp(app);
 				break;
 			default:
