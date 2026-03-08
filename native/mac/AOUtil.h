@@ -26,6 +26,7 @@ using namespace std;
 NS_ASSUME_NONNULL_BEGIN
 
 @interface AOUtil : NSObject
++ (void)requestPermissions;
 + (BOOL)shouldBeOnTop;
 + (BOOL)isFullScreen:(CGRect)bounds;
 + (BOOL)macOSGetMouseState;

@@ -10,6 +10,7 @@
 #include "../util.h"
 
 @interface AOUtil ()
++ (void)requestPermissions;
 + (void (^)(void))createEventBlocks;
 + (void)accessibilityChanged:(NSNotification *)note;
 + (void)handleAXDestroyed:(pid_t)pid;
@@ -77,7 +78,7 @@ static void ax_callback(
 	}
 	CGWindowID elementWindowId;
 	_AXUIElementGetWindow(element, &elementWindowId);
-		if (str_eq(notification, kAXUIElementDestroyedNotification)) {
+	if (str_eq(notification, kAXUIElementDestroyedNotification)) {
 		[AOUtil handleAXDestroyed:pid];
 	} else if (str_eq(notification, kAXApplicationActivatedNotification)) {
 		[AOUtil handleAXActivate:pid];
@@ -108,6 +109,7 @@ static bool rightMouseDown = false;
 	dispatch_once(&once, ^{
 		[AOUtil createEventBlocks]();
 	});
+	[AOUtil requestPermissions];
 }
 
 + (NSLock *)pidLock
@@ -236,25 +238,25 @@ static bool rightMouseDown = false;
 		[NSRunningApplication runningApplicationWithProcessIdentifier:pid];
 	if (![application isTerminated]) {
 		CGWindowID nwindowId = [AOUtil appFocusedWindow:pid];
-        if (nwindowId != kCGNullWindowID) {
-            if ([trackedWindows objectForKey:pidRef] != nil) {
-                CGWindowID rsWinId = [trackedWindows[pidRef] unsignedIntValue];
-                if (rsWinId == nwindowId) {
-                    BOOL hasSwitchedToFullScreenApp =
-                    !areWeOnActiveSpaceNative();
-                    if (hasSwitchedToFullScreenApp) {
-                        NSArray<NSView *> *allViews = trackedViews[pidRef];
-                        for (NSView *cview in allViews) {
-                            NSWindow *window = [cview window];
-                            [AOUtil updateWindow:window];
-                        }
-                    }
-                    return;
-                }
-            } else {
-                NSLog(@"It appears the RS Window Closed");
-            }
-        }
+		if (nwindowId != kCGNullWindowID) {
+			if ([trackedWindows objectForKey:pidRef] != nil) {
+				CGWindowID rsWinId = [trackedWindows[pidRef] unsignedIntValue];
+				if (rsWinId == nwindowId) {
+					BOOL hasSwitchedToFullScreenApp =
+						!areWeOnActiveSpaceNative();
+					if (hasSwitchedToFullScreenApp) {
+						NSArray<NSView *> *allViews = trackedViews[pidRef];
+						for (NSView *cview in allViews) {
+							NSWindow *window = [cview window];
+							[AOUtil updateWindow:window];
+						}
+					}
+					return;
+				}
+			} else {
+				NSLog(@"It appears the RS Window Closed");
+			}
+		}
 	} else {
 		NSLog(@"It appears the RS Application Terminated");
 	}
@@ -489,38 +491,44 @@ static bool rightMouseDown = false;
 	return leftMouseDown;
 }
 
++ (void)requestPermissions
+{
+	// Screen recording
+	if (@available(macOS 10.15, *)) {
+		if (!CGPreflightScreenCaptureAccess()) {
+			CGRequestScreenCaptureAccess();
+			// Don't proceed — notify JS layer to tell user to restart
+			return;
+		}
+	}
+
+	// Accessibility
+	NSDictionary *options = @{ (__bridge NSString *)kAXTrustedCheckOptionPrompt: @YES };
+	BOOL trusted = AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)options);
+	if (!trusted) {
+		// Notify JS layer — don't proceed, don't loop
+		return;
+	}
+}
+
 + (void)macOSNewWindowListener:(CGWindowID)window
 			  type:(WindowEventType)type
 			  tsfn:(std::shared_ptr<Napi::ThreadSafeFunction>)tsfn
 			   ref:(std::shared_ptr<Napi::FunctionReference>)ref
 {
-	// Check for duplicate FIRST before any other work
 	if ([AOTrackedEvent eventsContain:window andType:type andRef:ref]) {
-		NSLog(@"macOSNewWindowListener: already tracking window=%u type=%u, skipping",
-			window, type);
-		tsfn->Release();   // release the TSFN we created since we won't store it
+		NSLog(@"already tracking window=%u type=%u, skipping", window, type);
+		tsfn->Release();
 		return;
 	}
 
-	if (window != 0) {
-		pid_t pid = [AOUtil pidForWindow:window];
+	// Permissions already checked at startup — just do the work
+	pid_t pid = [AOUtil pidForWindow:window];
+	if (pid == 0) {
+		NSLog(@"could not get pid for window=%u", window);
+		tsfn->Release();
+		return;
 	}
-
-	int attempts = 0;
-	while (true) {
-		if (ax_privilege() || attempts >= 5) {
-			break;
-		}
-		NSLog(@"no accessibility permissions! Retrying until access is permitted or 300 seconds have passed");
-		sleep(60);
-		attempts++;
-	}
-
-#if MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_15
-	dispatch_async(dispatch_get_main_queue(), ^{
-		CGRequestScreenCaptureAccess();
-	});
-#endif
 
 	[AOTrackedEvent push:window andType:type tsfn:tsfn ref:ref];
 }
