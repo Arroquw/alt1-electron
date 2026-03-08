@@ -80,6 +80,11 @@ export function reloadAddon() {
 	if (process.env.NODE_ENV === "development") {
 		const tmp = getCachePath();
 		fs.copyFileSync(addon_source, tmp);
+		if (process.platform === "win32") {
+			const dllSrc = path.join(path.dirname(addon_source), "Alt1Native.dll");
+			const dllDst = path.join(path.dirname(tmp), "Alt1Native.dll");
+			fs.copyFileSync(dllSrc, dllDst);
+		}
 		addon_path = tmp;
 	}
 	native = __non_webpack_require__(addon_path);
