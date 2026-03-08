@@ -85,14 +85,12 @@
 	NSLock *lock = [AOTrackedEvent eventLock];
 	[lock tryLock];
 	NSMutableSet<AOTrackedEvent *> *events = [AOTrackedEvent events];
-	NSLog(@"push: Events Before: %@ [%@]", @([events count]), events);
 	if ([events containsObject:event]) {
 		NSLog(@"Unable to add %@ as it already exists!", event);
 		[lock unlock];
 		return;
 	}
 	[events addObject:event];
-	NSLog(@"push: Events After: %@ [%@]", @([events count]), events);
 	[lock unlock];
 }
 
@@ -114,7 +112,6 @@
 	    ref:(std::shared_ptr<Napi::FunctionReference>)ref
 {
 	if (![AOTrackedEvent eventsContain:window andType:type andRef:ref]) {
-		NSLog(@"pushing event: Event[%@, %d]", [AOTrackedEvent typeName:type], window);
 		[AOTrackedEvent pushEvent:[[AOTrackedEvent alloc] initWith:window
 								   andType:type
 								      tsfn:tsfn

@@ -26,7 +26,6 @@
 - (void)forwardInvocation:(NSInvocation *)invocation
 {
 	SEL aSelector = [invocation selector];
-	NSLog(@"Forwarding %@", invocation);
 	if ([delegate respondsToSelector:aSelector])
 		[invocation invokeWithTarget:delegate];
 	else

@@ -60,7 +60,6 @@ float OSWindow::OSGetScale()
 {
 	CFDictionaryRef windowInfo = [AOUtil findWindow:this->handle.winid];
 	if (windowInfo == nullptr) {
-		printf("window nil - something changed!\n");
 		return 1.0;
 	}
 	CGRect screenBounds;
@@ -236,16 +235,11 @@ void OSNewWindowListener(OSWindow wnd, WindowEventType type, Napi::Function call
 			callback.Env(), dummy, "nodethread", 0, 1, [](Napi::Env) {});
 	}
 
-	NSLog(@"mac: OSNewWindowListener: wnd:%lu, type:%u", wnd.handle.winid, (uint32_t)type);
-
-	// Capture everything by value before any async hop
 	CGWindowID winid = (CGWindowID)wnd.handle.winid;
 	WindowEventType capturedType = type;
 
-	// Persist the callback to keep the JS function alive across threads
 	auto persistedRef = std::make_shared<Napi::FunctionReference>(Napi::Persistent(callback));
 
-	// Schedule TSFN creation back onto the Node thread
 	g_nodeThreadTsfn.NonBlockingCall([persistedRef, winid, capturedType](
 						 Napi::Env env, Napi::Function) {
 		auto tsfn =
@@ -260,7 +254,6 @@ void OSNewWindowListener(OSWindow wnd, WindowEventType type, Napi::Function call
 
 void OSRemoveWindowListener(OSWindow wnd, WindowEventType type, Napi::Function callback)
 {
-	NSLog(@"mac: OSRemoveWindowListener: wnd:%lu, type:%u", wnd.handle.winid, (uint32_t)type);
 	[AOUtil macOSRemoveWindowListener:(CGWindowID)wnd.handle.winid type:type callback:callback];
 }
 
