@@ -106,18 +106,6 @@ function detectEdge(img: FlatImageData, rect: a1lib.Rect, hor: boolean, reverse:
 	return best;
 }
 
-function debugSaveImageData(data: ImageData, path = 'debug_capture_ipcapi.png') {
-    // ImageData is RGBA, nativeImage.createFromBitmap expects BGRA
-    const buf = Buffer.from(data.data.buffer);
-    for (let i = 0; i < buf.length; i += 4) {
-        const r = buf[i];
-        buf[i] = buf[i + 2];     // B
-        buf[i + 2] = r;           // R
-    }
-    const image = nativeImage.createFromBitmap(buf, { width: data.width, height: data.height });
-    fs.writeFileSync(path, image.toPNG());
-}
-
 function startDrag(wnd: ManagedWindow, left: boolean, top: boolean, right: boolean, bot: boolean) {
 	top ??= false; left ??= false; right ??= false; bot ??= false;
 
@@ -274,7 +262,6 @@ export function initIpcApi(ipcMain: IpcMain) {
 			captureMode: settings.captureMode,
 			mousePosition: mousePosition
 		};
-		console.log("rsbounds", state);
 		e.returnValue = { value: state };
 	}));
 
@@ -282,7 +269,6 @@ export function initIpcApi(ipcMain: IpcMain) {
 		let client = expectPermittedRsClient(e);
 		let capt = native.captureWindowMulti(client.window.handle, settings.captureMode, { main: { x, y, width, height } });
 		let data: ImageData = imageDataFrom(capt.main, width, height);
-		debugSaveImageData(data);
 		return capt.main;
 	});
 

@@ -195,7 +195,6 @@ export class ManagedWindow {
 		this.window.setVisibleOnAllWorkspaces(true, {visibleOnFullScreen: true});
 
 		this.window.setVisibleOnAllWorkspaces(true, {visibleOnFullScreen: true, skipTransformProcessType: true});
-		// this.window.setAlwaysOnTop(true, "screen-saver");
 		this.nativeWindow = new OSWindow(this.window.getNativeWindowHandle());
 		this.rsClient = rsclient;
 		this.appConfig = app;

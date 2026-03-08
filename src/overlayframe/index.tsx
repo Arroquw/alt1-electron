@@ -44,7 +44,6 @@ ipcRenderer.on("overlay", (e, frameid: number, commands) => {
 });
 
 ipcRenderer.on("closeframe", (e, frameid: number) => {
-	console.log(`Closeframe closing groupstates for ${frameid}`);
 	framestates.delete(frameid);
 	groupstates = groupstates.filter(q => q.frameid != frameid);
 	redraw(Date.now());
@@ -205,7 +204,6 @@ function redraw(now: number, force = false) {
 					ctx.fillStyle = coltocss(act.color);
 					ctx.font = `normal 900 ${act.size}px ${act.font || "sans-serif"}`;
 					ctx.textAlign = act.center ? "center" : "start";
-					// ctx.textBaseline = act.center ? "middle" : "top";
 					ctx.fillText(act.text, act.x, act.y);
 				} else if (act.type == "sprite") {
 					// Check if width and height are valid positive numbers before drawing
@@ -218,13 +216,13 @@ function redraw(now: number, force = false) {
 		}
 	}
 
-	// if (drawcount == 0 && !shutdowntimer) {
-	// 	shutdowntimer = setTimeout(e => window.close(), shutdowntimeout) as any;
-	// }
-	// if (drawcount != 0 && shutdowntimer) {
-	// 	clearTimeout(shutdowntimer);
-	// 	shutdowntimer = 0;
-	// }
+	if (drawcount == 0 && !shutdowntimer) {
+		shutdowntimer = setTimeout(e => window.close(), shutdowntimeout) as any;
+	}
+	if (drawcount != 0 && shutdowntimer) {
+		clearTimeout(shutdowntimer);
+		shutdowntimer = 0;
+	}
 
 	scheduleRedraw(newnextupdate);
 }

@@ -119,29 +119,8 @@ export class OverlayWindow {
 	stalledOverlay: StalledOverlay[];
 }
 
-function debugSaveImageData(data: ImageData, path = 'debug_capture_rsinstance.png') {
-    const buf = Buffer.from(data.data.buffer);
-    for (let i = 0; i < buf.length; i += 4) {
-        const r = buf[i];
-        buf[i] = buf[i + 2];     // B
-        buf[i + 2] = r;           // R
-    }
-
-    const image = electron.nativeImage.createFromBitmap(
-        buf,
-        { width: data.width, height: data.height }
-    );
-    fs.writeFileSync(path, image.toPNG()); 
-}
-
-function probePixel(data: ImageData, x: number, y: number) {
-    const i = (y * data.width + x) * 4;
-    console.log(`pixel(${x},${y}): R=${data.data[i]} G=${data.data[i+1]} B=${data.data[i+2]} A=${data.data[i+3]}`);
-}
-
 export class RsInstance extends TypedEmitter<RsInstanceEvents>{
 	window: OSWindow;
-	// overlayWindow: { browser: BrowserWindow, pin: OSWindowPin | null, stalledOverlay: { frameid: number, cmd: OverlayCommand[] }[] } | null;
 	overlayWindow: OverlayWindow | null;
 	activeRightclick: ActiveRightclick | null = null;
 	isActive = false;
@@ -292,8 +271,6 @@ export class RsInstance extends TypedEmitter<RsInstanceEvents>{
 	capture(rect: RectLike) {
 		let capt = native.captureWindowMulti(this.window.handle, settings.captureMode, { main: rect });
 		let data: ImageData = imageDataFrom(capt.main, rect.width, rect.height);
-                probePixel(data, 150, 170);
-		debugSaveImageData(data);
 		return data;
 	}
 
@@ -388,7 +365,6 @@ export class RsInstance extends TypedEmitter<RsInstanceEvents>{
 				console.log("overlay closed");
 			});
 			browser.setIgnoreMouseEvents(true);
-			// this.overlayWindow = { browser, pin, stalledOverlay: [{ frameid: frameid, cmd: commands }] };
 			this.overlayWindow = new OverlayWindow();
 			this.overlayWindow.browser = browser;
 			this.overlayWindow.pin = pin;
