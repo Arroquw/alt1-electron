@@ -1,5 +1,5 @@
-import { ipcRenderer } from "electron";
-import type { Settings, Bookmark } from "../settings";
+import { ipcRenderer, dialog } from "electron";
+import type { Settings, Bookmark, UpdateCheck } from "../settings";
 import type { CaptureMode } from "../native";
 import * as React from "react";
 import * as ReactDom from "react-dom";
@@ -16,7 +16,7 @@ async function start() {
 }
 
 function SettingsComponent() {
-	let [tab, setTab] = React.useState<"apps" | "capture">("apps");
+	let [tab, setTab] = React.useState<"apps" | "capture" | "general">("apps");
 	let [settings, updateSettings] = React.useState<Settings | null>(null);
 
 	React.useEffect(() => {
@@ -34,11 +34,15 @@ function SettingsComponent() {
 	if (tab == "capture" && settings) {
 		content = <CaptureSettings settings={settings} />
 	}
+	if (tab == "general" && settings) {
+		content = <GeneralSettings settings={settings} />
+	}
 
 	return (
 		<React.Fragment>
 			<button onClick={() => setTab("apps")}>Apps</button>
 			<button onClick={() => setTab("capture")}>Capture</button>
+			<button onClick={() => setTab("general")}>General</button>
 			<hr />
 			{content}
 		</React.Fragment>
@@ -78,21 +82,21 @@ class AppSettings extends React.Component<AppSettingsProps, AppSettingsState> {
 		this.setState({ busy: true, error: "", status: "", pending: null });
 
 		try {
-		const res = await ipcRenderer.invoke("installapp_preview", input);
-		// res: { normalizedUrl: string, config: AppConfigImport }
-		this.setState({
-			pending: {
-			normalizedUrl: res.normalizedUrl,
-			appName: res.config.appName,
-			description: res.config.description || ""
-			},
-			busy: false
-		});
+			const res = await ipcRenderer.invoke("installapp_preview", input);
+			// res: { normalizedUrl: string, config: AppConfigImport }
+			this.setState({
+				pending: {
+					normalizedUrl: res.normalizedUrl,
+					appName: res.config.appName,
+					description: res.config.description || ""
+				},
+				busy: false
+			});
 		} catch (err: any) {
-		this.setState({
-			error: err?.message ?? String(err),
-			busy: false
-		});
+			this.setState({
+				error: err?.message ?? String(err),
+				busy: false
+			});
 		}
 	}
 
@@ -101,18 +105,18 @@ class AppSettings extends React.Component<AppSettingsProps, AppSettingsState> {
 
 		this.setState({ busy: true, error: "", status: "" });
 		try {
-		await ipcRenderer.invoke("installapp_confirm", this.state.pending.normalizedUrl);
-		this.setState({
-			status: `Installed ${this.state.pending.appName}`,
-			configUrl: "",
-			pending: null,
-			busy: false
-		});
+			await ipcRenderer.invoke("installapp_confirm", this.state.pending.normalizedUrl);
+			this.setState({
+				status: `Installed ${this.state.pending.appName}`,
+				configUrl: "",
+				pending: null,
+				busy: false
+			});
 		} catch (err: any) {
-		this.setState({
-			error: err?.message ?? String(err),
-			busy: false
-		});
+			this.setState({
+				error: err?.message ?? String(err),
+				busy: false
+			});
 		}
 	}
 
@@ -170,6 +174,37 @@ function CaptureSettings(props: { settings: Settings }) {
 			<label><input type="radio" value="window" name="captmode" onChange={modechange} checked={props.settings.captureMode == "window"} />Window</label>
 			<label><input type="radio" value="desktop" name="captmode" onChange={modechange} checked={props.settings.captureMode == "desktop"} />Desktop</label>
 			<CapturePreview mode={props.settings.captureMode} />
+		</React.Fragment>
+	);
+}
+
+function GeneralSettings(p: { settings: Settings }) {
+	const [checkOnStartup, setCheckOnStartup] = React.useState(p.settings.checkForUpdates.checkOnStartup);
+	const [checkOnRsStart, setCheckOnRsStart] = React.useState(p.settings.checkForUpdates.checkOnRsStart);
+
+	let changeStartup = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const next = e.currentTarget.checked;
+		setCheckOnStartup(next);
+		ipcRenderer.invoke("setcheckupdates", { checkOnStartup: next, checkOnRsStart });
+	}
+
+	let changeRsStart = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const next = e.currentTarget.checked;
+		setCheckOnRsStart(next);
+		ipcRenderer.invoke("setcheckupdates", { checkOnStartup, checkOnRsStart: next });
+	}
+
+	return (
+		<React.Fragment>
+			<p></p>
+			<label>
+				<input type="checkbox" onChange={changeStartup} checked={checkOnStartup} />
+				Check for Updates on startup
+			</label>
+			<label>
+				<input type="checkbox" onChange={changeRsStart} checked={checkOnRsStart} />
+				Check for Updates on starting RS
+			</label>
 		</React.Fragment>
 	);
 }

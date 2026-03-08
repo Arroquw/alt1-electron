@@ -29,10 +29,16 @@ jobs:
         with:
           node-version: 24
 
+      - name: Set nightly version
+        run: |
+          DATE=$(date +%Y%m%d%H%M)
+          # e.g. 0.202603071230.0-nightly
+          npm version "0.${DATE}.0-nightly" --no-git-tag-version
+
       - name: Build (no publish)
         run: |
           npm ci
-          npm run build
+          npm run build -- --mode production
           npx electron-builder -l --publish never
 
       - name: Move nightly tag

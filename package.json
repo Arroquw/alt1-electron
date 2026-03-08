@@ -9,8 +9,8 @@
 	"scripts": {
 		"build": "webpack --config ./webpack.config.cjs",
 		"dist": "npm run dist:$(node -p \"process.platform\")",
-		"dist:linux": "electron-builder -l",
 		"dist:darwin": "electron-builder -m",
+		"dist:linux": "electron-builder -l",
 		"dist:win32": "electron-builder -w",
 		"format": "find native \\( -iname '*.cc' -o -iname '*.mm' -o -iname '*.h' \\) | xargs clang-format -style=file -i",
 		"install": "npm run native",
@@ -43,11 +43,12 @@
 		"url-loader": "^4.1.1"
 	},
 	"devDependencies": {
+		"@electron/asar": "^3.4.1",
+		"@electron/rebuild": "^4.0.3",
+		"@electron/remote": "^2.0.8",
 		"electron": "^35.5.1",
 		"electron-builder": "^26.0.12",
-		"@electron/rebuild": "^4.0.3",
-		"@electron/asar": "^3.4.1",
-		"@electron/remote": "^2.0.8",
+		"electron-updater": "^6.8.3",
 		"ts-loader": "^8.0.14",
 		"typescript": "^5.7.3",
 		"webpack": "^5.104.1",
@@ -66,15 +67,27 @@
 			"output": "release"
 		},
 		"linux": {
-			"target": ["AppImage"],
+			"artifactName": "${productName}-${version}.${ext}",
+			"target": [
+				"AppImage"
+			],
 			"icon": "src/imgs/alt1icon_large.png",
 			"category": "Utility",
 			"protocols": [
 				{
 					"name": "alt1",
-					"schemes": ["alt1"]
+					"schemes": [
+						"alt1"
+					]
 				}
-			]
+			],
+			"publish": {
+				"provider": "github",
+				"owner": "Arroquw",
+				"repo": "alt1-electron",
+				"releaseType": "release",
+				"channel": "latest"
+			}
 		},
 		"win": {
 			"target": [
