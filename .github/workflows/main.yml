@@ -29,11 +29,11 @@ jobs:
         with:
           node-version: 24
 
-      - name: Nodejs build
+      - name: Build and Package
         run: |
           npm ci
           npm run build
-          npm run dist -- --publish never'
+          npm run dist:$(node -p "process.platform") -- --publish never
 
       - name: Move nightly tag
         env:
