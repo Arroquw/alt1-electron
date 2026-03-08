@@ -1,4 +1,4 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, WebContents } from "electron";
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, WebContents } from "electron";
 import * as electron from "electron";
 import * as path from "path";
 import { Menu, Tray } from "electron/main";
@@ -13,6 +13,7 @@ import * as remoteMain from "@electron/remote/main";
 import { initIpcApi } from "./ipcapi";
 import * as fs from "fs";
 import { execSync } from 'child_process';
+import { type AppUpdater } from 'electron-updater';
 
 if (process.env.NODE_ENV === "development") {
 	patchImageDataShow();
@@ -60,7 +61,10 @@ app.on("window-all-closed", () => {
 	// existance of this listener prevent electron default behavior of closing
 });
 
-app.once("ready", () => {
+app.once("ready", async () => {
+	if (settings.checkForUpdates.checkOnStartup) {
+		checkForUpdate();
+	}
 	if (process.platform === 'linux') {
 		registerProtocolHandlerLinux();
 	} else {
@@ -126,6 +130,60 @@ function registerProtocolHandlerLinux() {
 	console.log('Protocol handler registered');
 }
 
+export async function checkForUpdate() {
+	const autoUpdater = getAutoUpdater();
+
+	autoUpdater.on("update-available", (info) => {
+		dialog.showMessageBox({
+			type: "info",
+			title: "Update available",
+			message: `Version ${info.version} is available. Download now?`,
+			buttons: ["Download", "Later"],
+		}).then(({ response }) => {
+			if (response === 0) {
+				autoUpdater.downloadUpdate();
+			}
+		});
+	});
+
+	autoUpdater.on("update-not-available", () => { // TODO: Add as setting to settings window
+		dialog.showMessageBox({
+			type: "info",
+			title: "No updates",
+			message: "You're on the latest version.",
+			buttons: ["OK"],
+		});
+	});
+
+	autoUpdater.on("update-downloaded", () => {
+		dialog.showMessageBox({
+			type: "info",
+			title: "Update ready",
+			message: "Update downloaded. The app will restart to apply the update.",
+			buttons: ["Restart now", "Later"],
+		}).then(({ response }) => {
+			if (response === 0) {
+				autoUpdater.quitAndInstall();
+			}
+		});
+	});
+
+	autoUpdater.on("error", (err) => {
+		dialog.showMessageBox({
+			type: "error",
+			title: "Update error",
+			message: `Failed to check for updates: ${err.message}`,
+			buttons: ["OK"],
+		});
+	});
+
+	try {
+		await autoUpdater.checkForUpdates();
+	} catch (err) {
+		console.error("Failed to check for updates: ", err);
+	}
+}
+
 function alt1Pressed() {
 	let rsinst = getRsInstanceFromWnd(getActiveWindow());
 	try {
@@ -136,6 +194,15 @@ function alt1Pressed() {
 	} catch (e) {
 		console.log("alt+1 hotkey read failed: " + e);
 	}
+}
+
+function getAutoUpdater(): AppUpdater {
+	// Using destructuring to access autoUpdater due to the CommonJS module of 'electron-updater'.
+	// It is a workaround for ESM compatibility issues, see https://github.com/electron-userland/electron-builder/issues/7976.
+	const { autoUpdater } = require('electron-updater');
+	autoUpdater.allowDowngrade = true;
+	autoUpdater.autoDownload = false;
+	return autoUpdater;
 }
 
 export function openApp(app: Bookmark, inst?: RsInstance) {
@@ -266,6 +333,7 @@ function updateTray() {
 				}
 			});
 	}
+	menu.push({ label: "Check for update", click: checkForUpdate });
 	menu.push({ type: "separator" });
 	menu.push({ label: "Settings", click: showSettings });
 	menu.push({ label: "Exit", click: e => app.quit() });

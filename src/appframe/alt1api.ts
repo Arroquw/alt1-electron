@@ -2,7 +2,7 @@
 import type * as alt1types from "alt1";
 import { ipcRenderer } from "electron";
 import { FlatImageData, SyncResponse, OverlayCommand, RsClientState } from "../shared";
-import { decodeImageString } from "alt1";
+import { decodeImageString, findSubbuffer } from "alt1";
 
 export type StatusDaemon = {
 	url: string | null,
@@ -166,16 +166,31 @@ var alt1api: Partial<typeof alt1> = {
 	maxtransfer: 100e6,
 	openInfo: '{"openMethod":"systray"}',
 	skinName: "default",
-	version: "1.3.0",//old-ish version because of missing apis
-	versionint: 1003000,
+	version: "1.5.1",
+	versionint: 1005001,
 	openBrowser: (url) => { window.open(url, "_blank"); return true; },
 	getRegion: (x, y, w, h) => {
 		let img = captureSync(x, y, w, h);
 		return imagedataToBase64(img);
 	},
+	getRegionMulti: (rectsjson: string) => {
+		const rects: { x: number, y: number, w: number, h: number }[] = JSON.parse(rectsjson);
+
+		const images = rects.map(rect => captureSync(rect.x, rect.y, rect.w, rect.h));
+
+		const totalLength = images.reduce((sum, img) => sum + img.data.length, 0);
+		const combined = new Uint8ClampedArray(totalLength);
+		let offset = 0;
+		for (const img of images) {
+			combined.set(img.data, offset);
+			offset += img.data.length;
+		}
+		return imagedataToBase64({ data: combined, width: 0, height: 0 });
+	},
 	bindRegion(x, y, w, h) {
 		warn("bindbypass", "This platform does not utilise the bound image pattern, bound images are the same speed as normal capture");
-		boundImage = { x, y, ...captureSync(x, y, w, h) };
+		const captured = captureSync(x, y, w, h);
+		boundImage = { x, y, ...captured };
 		return 1;
 	},
 	bindGetPixel(id, x, y) {
@@ -209,10 +224,8 @@ var alt1api: Partial<typeof alt1> = {
 		const raw = atob(imgstr);
 		var height = raw.length / 4 / imgwidth;
 		if (!Number.isInteger(height)) {
-			console.log("flooring height: ", height);
 			height = Math.floor(height);
 			if (!Number.isInteger(height)) {
-				console.log("Height actually:", height);
 				throw new Error("Invalid data or width: height not an int");
 			}
 		}
@@ -276,7 +289,6 @@ var alt1api: Partial<typeof alt1> = {
 		return subImageData(boundImage, x, y, w, h).data;
 	},
 	closeApp() {
-		//TODO check if this actually works
 		window.close();
 	},
 	userResize(left, top, right, bot) {
@@ -287,10 +299,19 @@ var alt1api: Partial<typeof alt1> = {
 		console.log("Setting title bar text to: ", text);
 		return;
 	},
-	//TODO
-	// bindFindSubImg: ,
-	// getRegionMulti: ,
-	// registerStatusDaemon: ,
+	bindFindSubImg(id, imgstr, imgwidth, x, y, w, h) {
+		if (!boundImage || id != 1) { return ""; }
+
+		const imgheight = (atob(imgstr).length / 4) / imgwidth;
+		const needleData = new ImageData(imgwidth, imgheight);
+		decodeImageString(imgstr, needleData, 0, 0, imgwidth, imgheight);
+
+		const haystackData = new ImageData(new Uint8ClampedArray(boundImage.data), boundImage.width, boundImage.height);
+		const results = findSubbuffer(haystackData, needleData, x, y, w, h);
+
+		return JSON.stringify(results);
+	},
+	// TODO
 	// showNotification: ,
 	// setTaskbarProgress: ,
 	// setTitleBarText: ,
@@ -303,7 +324,6 @@ var alt1api: Partial<typeof alt1> = {
 	// bindReadStringEx: ,
 	// bindScreenRegion: ,
 	// clearBinds: ,
-
 };
 
 function subImageData(img: FlatImageData, x: number, y: number, w: number, h: number) {

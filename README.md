@@ -3,7 +3,7 @@ This is a fork! For any questions or bugs you'd like to see fixed, please file a
 
 ## Installation
 This app is available bundled as a portable AppImage. You can find it in the releases, or by [clicking here](https://github.com/arroquw/alt1-electron/releases/download/nightly/Alt1Lite-0.0.1.AppImage). You may save it anywhere you like.  
-**This is a rolling-release build.** To update, simply delete your AppImage file and download again. If you have issues, make sure you try this.
+**This is a rolling-release build.** To update, enable "check for updates" in the settings window, this will update the application for you. If you have issues, make sure you try this.
 
 ## Wayland
 If you're using wayland, the compositor is unaware of any positioning that `alt1-electron` does or tries to do, due to the wayland devs not wanting windows to determine their own position, instead leaving it to the user. For Hyprland (tiling window manager) for instance, specific windowrules are required to at least:
