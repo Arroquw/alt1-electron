@@ -45,12 +45,11 @@ jobs:
           npm run dist -- --publish never
 
       - name: Move nightly tag
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh api -X PATCH \
-            repos/${{ github.repository }}/git/refs/tags/nightly \
-            -f sha="${GITHUB_SHA}"
+          gh api -X PATCH repos/${{ github.repository }}/git/refs/tags/nightly -f sha="${GITHUB_SHA}"
 
       - name: Publish rolling Nightly release
         if: matrix.os == 'ubuntu-latest'
