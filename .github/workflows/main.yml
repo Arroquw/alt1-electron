@@ -30,6 +30,7 @@ jobs:
           node-version: 24
 
       - name: Set nightly version
+        shell: bash
         run: |
           DATE=$(date +%Y%m%d%H%M)
           # e.g. 0.202603071230.0-nightly
