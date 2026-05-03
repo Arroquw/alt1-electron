@@ -478,7 +478,17 @@ TrackedEvent::TrackedEvent(OSWindow wnd, WindowEventType type, Napi::Function cb
 			WindowsEventHook::GetHook(wnd.handle, WindowsEventGroup::Object),
 		};
 		break;
+	case WindowEventType::MouseMove:
+		break;
 	default:
 		assert(false);
 	}
+}
+
+JSPoint OSGetCursorScreenPoint()
+{
+	POINT pt;
+	if (!GetCursorPos(&pt))
+		return JSPoint(0, 0);
+	return JSPoint(static_cast<int32_t>(pt.x), static_cast<int32_t>(pt.y));
 }

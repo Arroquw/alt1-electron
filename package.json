@@ -8,7 +8,7 @@
 	"main": "./dist/alt1lite.bundle.js",
 	"scripts": {
 		"build": "webpack --config ./webpack.config.cjs",
-		"dist": "npm run dist:$(node -p \"process.platform\")",
+		"dist": "node scripts/dist.js",
 		"dist:darwin": "electron-builder -m",
 		"dist:linux": "electron-builder -l",
 		"dist:win32": "electron-builder -w",
