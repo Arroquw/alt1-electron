@@ -66,7 +66,6 @@ npm run watch
 ```console
 # emerge --ask --noreplace dev-util/pkgconf x11-libs/libxcb x11-libs/xcb-util-wm
 ```
-
 ### Nix (flake)
 
 To run the flake:
@@ -89,6 +88,12 @@ StartupWMClass=Alt1Toolkit
 ```
 
 `nix run github:arroquw/alt1-electron` should also work
+
+## Mac
+
+#### Gatekeeper, Accessibility, Screen Recording 
+
+alt1-electron will only work if the electron application has both accessibility and screen/audio recording permisisons.
 
 # Why rewrite?
 
@@ -149,12 +154,12 @@ See [contributing.md](./contributing.md) for information on how to contribute to
 	- [x] Window pinning
 	- [x] Capture
 		- [x] Window
-- [ ] MacOS
-	- [ ] Basics
-	- [ ] Window events API
-	- [ ] Window pinning
-	- [ ] Capture
-		- [ ] Window
+- [x] MacOS
+	- [x] Basics
+	- [x] Window events API
+	- [x] Window pinning
+	- [x] Capture
+		- [x] Window
 
 **TODO**
 - [ ] Actually implement capture method toggle

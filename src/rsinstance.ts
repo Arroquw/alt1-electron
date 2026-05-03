@@ -11,7 +11,7 @@ import { openApp, managedWindows, selectAppContexts, checkForUpdate } from "./ma
 import { Alt1EventType, ImgRef, ImgRefData, PointLike, Rect, RectLike } from "alt1";
 import { readAnything } from "./readers/alt1reader";
 import RightClickReader from "./readers/rightclick";
-
+import * as fs from 'fs';
 
 export var rsInstances: RsInstance[] = [];
 
@@ -20,7 +20,7 @@ const newRsWindow = (handle) => new RsInstance(new OSWindow(handle));
 export function initRsInstanceTracking() {
 	detectInstances();
 	OSNullWindow.on("show", newRsWindow);
-};
+}
 
 export function stopRsInstanceTracking() {
 	OSNullWindow.removeListener("show", newRsWindow);
@@ -109,9 +109,19 @@ class ActiveRightclick {
 	}
 }
 
-export class RsInstance extends TypedEmitter<RsInstanceEvents> {
+export class StalledOverlay {
+	frameid: number;
+	cmd: OverlayCommand[];
+}
+export class OverlayWindow {
+	browser: BrowserWindow;
+	pin: OSWindowPin | null;
+	stalledOverlay: StalledOverlay[];
+}
+
+export class RsInstance extends TypedEmitter<RsInstanceEvents>{
 	window: OSWindow;
-	overlayWindow: { browser: BrowserWindow, pin: OSWindowPin | null, stalledOverlay: { frameid: number, cmd: OverlayCommand[] }[] } | null;
+	overlayWindow: OverlayWindow | null;
 	activeRightclick: ActiveRightclick | null = null;
 	isActive = false;
 	lastActiveTime = 0;
@@ -169,7 +179,7 @@ export class RsInstance extends TypedEmitter<RsInstanceEvents> {
 
 	emitAppEvent<T extends keyof Alt1EventType>(permission: AppPermission | "", type: T, event: Alt1EventType[T]) {
 		for (let context of selectAppContexts(this, permission)) {
-			context.send("appevent", type, event);
+			context?.send("appevent", type, event);
 		}
 	}
 
@@ -263,7 +273,8 @@ export class RsInstance extends TypedEmitter<RsInstanceEvents> {
 
 	capture(rect: RectLike) {
 		let capt = native.captureWindowMulti(this.window.handle, settings.captureMode, { main: rect });
-		return imageDataFrom(capt.main, rect.width, rect.height);
+		let data: ImageData = imageDataFrom(capt.main, rect.width, rect.height);
+		return data;
 	}
 
 	alt1Pressed() {
@@ -310,41 +321,64 @@ export class RsInstance extends TypedEmitter<RsInstanceEvents> {
 			mouseRs: mousepos
 		});
 	}
-
+	clearOverlay(frameid: number) {
+		this.overlayWindow?.browser.webContents.send("closeframe", frameid);
+	}
 	overlayCommands(frameid: number, commands: OverlayCommand[]) {
 		if (!this.overlayWindow) {
 			let bounds = this.window.getClientBounds();
 			let browser = new BrowserWindow({
 				webPreferences: { nodeIntegration: true, contextIsolation: false },
 				frame: false,
+				enableLargerThanScreen: true,
 				transparent: true,
 				x: bounds.x,
 				y: bounds.y,
 				width: bounds.width,
 				height: bounds.height,
 				show: false,
+				hasShadow: false,
 				//resizable: false,
 				movable: false,
 				skipTaskbar: true,
 				focusable: false
 			});
+			browser.setVisibleOnAllWorkspaces(true, {visibleOnFullScreen: true, skipTransformProcessType: true});
 
 			let pin: OSWindowPin = new OSWindowPin(browser, this.window, "cover");
-			browser.loadFile(path.resolve(__dirname, "overlayframe/index.html"));
 			browser.on("closed", () => {
 				pin.unpin();
 				this.overlayWindow = null;
+			});
+			browser.loadFile(path.resolve(__dirname, "overlayframe/index.html")).then(() => {
+				console.log(`uh. loadFile fulfilled?`);
 			});
 			browser.once("ready-to-show", () => {
 				browser.show();
 			});
 			browser.webContents.once("dom-ready", () => {
+				console.log("browser called 'dom-ready'");
 				for (let stalled of this.overlayWindow!.stalledOverlay) {
 					browser.webContents.send("overlay", stalled.frameid, stalled.cmd);
 				}
 			});
+			browser.on("closed", () => {
+				pin.unpin();
+				this.overlayWindow = null;
+				console.log("overlay closed");
+			});
 			browser.setIgnoreMouseEvents(true);
-			this.overlayWindow = { browser, pin, stalledOverlay: [{ frameid: frameid, cmd: commands }] };
+			this.overlayWindow = new OverlayWindow();
+			this.overlayWindow.browser = browser;
+			this.overlayWindow.pin = pin;
+			this.overlayWindow.stalledOverlay = [
+				new StalledOverlay()
+			];
+			this.overlayWindow.stalledOverlay[0].frameid = frameid;
+			this.overlayWindow.stalledOverlay[0].cmd = commands;
+			for (let mw in managedWindows) {
+				console.log(`mw: ${managedWindows[mw].appFrameId} vs ${managedWindows[mw].window.webContents.id}`)
+			}
 		} else {
 			this.overlayWindow.browser.webContents.send("overlay", frameid, commands);
 		}

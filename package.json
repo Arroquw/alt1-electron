@@ -96,7 +96,7 @@
 		},
 		"mac": {
 			"target": [
-				"zip"
+				"dmg"
 			]
 		}
 	}

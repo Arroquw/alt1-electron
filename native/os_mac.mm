@@ -1,54 +1,182 @@
-#include <cstring>
-#include <iostream>
-#include <string>
-#include "os.h"
-#include "libproc.h"
+#import <cstring>
+#import <iostream>
+#import <vector>
+#import <CoreGraphics/CoreGraphics.h>
+#import "os.h"
+#import "mac/AOUtil.h"
+
+static std::atomic<int32_t> g_lastMouseX{ 0 };
+static std::atomic<int32_t> g_lastMouseY{ 0 };
+static std::atomic<bool> g_hasMousePos{ false };
+
+typedef struct filterData {
+	vector<OSWindow> wins;
+	CGWindowID windowId;
+	CFStringRef windowName;
+	CFStringRef prefix;
+} filterData;
 
 JSRectangle OSWindow::GetBounds()
 {
-	NSWindow *window = [this->hwnd.wnd window];
-	NSRect frame = [window frame];
-	int y = [[NSScreen mainScreen] frame].size.height - frame.origin.y - frame.size.height;
-	return JSRectangle(frame.origin.x, y, frame.size.width, frame.size.height);
+	CFDictionaryRef windowInfo = [AOUtil findWindow:this->handle.winid];
+
+	CGRect screenBounds;
+	if (windowInfo == nullptr) {
+		screenBounds = [[NSScreen screens][0] frame];
+	} else {
+		CGRectMakeWithDictionaryRepresentation(
+			(CFDictionaryRef)CFDictionaryGetValue(windowInfo, kCGWindowBounds),
+			&screenBounds);
+	}
+	JSRectangle jbounds(static_cast<int>(screenBounds.origin.x),
+		static_cast<int>(screenBounds.origin.y), static_cast<int>(screenBounds.size.width),
+		static_cast<int>(screenBounds.size.height));
+	return jbounds;
 }
 
 JSRectangle OSWindow::GetClientBounds()
 {
-	return JSRectangle();
+	CFDictionaryRef windowInfo = [AOUtil findWindow:this->handle.winid];
+	CGRect screenBounds;
+	if (windowInfo == nullptr) {
+		screenBounds = [[NSScreen screens][0] frame];
+	} else {
+		CGRectMakeWithDictionaryRepresentation(
+			(CFDictionaryRef)CFDictionaryGetValue(windowInfo, kCGWindowBounds),
+			&screenBounds);
+	}
+	BOOL isFs = [AOUtil isFullScreen:screenBounds];
+	JSRectangle jbounds(static_cast<int>(screenBounds.origin.x),
+		static_cast<int>(screenBounds.origin.y), static_cast<int>(screenBounds.size.width),
+		static_cast<int>(screenBounds.size.height));
+	if (!isFs) {
+		jbounds.y += TITLE_BAR_HEIGHT;
+		jbounds.height = jbounds.height - TITLE_BAR_HEIGHT;
+	}
+	return jbounds;
 }
 
-int OSWindow::GetPid()
+float OSWindow::OSGetScale()
 {
-	return 0;
+	CFDictionaryRef windowInfo = [AOUtil findWindow:this->handle.winid];
+	if (windowInfo == nullptr) {
+		return 1.0;
+	}
+	CGRect screenBounds;
+	CGRectMakeWithDictionaryRepresentation(
+		(CFDictionaryRef)CFDictionaryGetValue(windowInfo, kCGWindowBounds), &screenBounds);
+	return static_cast<float>(
+		[AOUtil findScalingFactor:[AOUtil findScreenForRect:screenBounds]]);
+}
+
+void filterWindows(const void *inputDictionary, void *context)
+{
+	if (context == NULL) {
+		return;
+	}
+	CFDictionaryRef entry = (CFDictionaryRef)inputDictionary;
+	filterData *data = (filterData *)context;
+	if (data->windowId != 0) {
+		CFNumberRef value = (CFNumberRef)CFDictionaryGetValue(entry, kCGWindowNumber);
+		CGWindowID windowId;
+		CFNumberGetValue(value, kCFNumberIntType, &windowId);
+		if (data->windowId == windowId) {
+			data->wins.push_back(OSWindow(OSRawWindow{ .winid = windowId }));
+		}
+	} else {
+		// Grab the window name, but since it's optional we need to check before we can use it.
+		CFStringRef windowName = (CFStringRef)CFDictionaryGetValue(entry, kCGWindowName);
+		if (CFStringGetLength(data->windowName) > 0) {
+			CFIndex windowNameLen =
+				windowName == NULL ? 0 : CFStringGetLength(windowName);
+			if (windowNameLen == 0 ||
+				kCFCompareEqualTo != CFStringCompare(windowName, data->windowName,
+							     kCFCompareCaseInsensitive)) {
+				return;
+			}
+		}
+		// Grab the application name, but since it's optional we need to check before we can use it.
+		CFStringRef applicationName =
+			(CFStringRef)CFDictionaryGetValue(entry, kCGWindowOwnerName);
+		if (applicationName != NULL && data->prefix != NULL) {
+			bool hasPrefix = CFStringHasPrefix(applicationName, data->prefix);
+			if (!hasPrefix) {
+				return;
+			}
+		}
+		CFNumberRef appPidRef = (CFNumberRef)CFDictionaryGetValue(entry, kCGWindowOwnerPID);
+		pid_t pid;
+		CFNumberGetValue(appPidRef, kCFNumberIntType, &pid);
+
+		// Grab the Window Bounds, it's a dictionary in the array, but we want to display it as a string
+		CFNumberRef alphaValueRef =
+			(CFNumberRef)CFDictionaryGetValue(entry, kCGWindowAlpha);
+		CGFloat alpha;
+		CFNumberGetValue(alphaValueRef, kCFNumberCGFloatType, &alpha);
+
+		// Grab the Window ID
+		CFNumberRef value = (CFNumberRef)CFDictionaryGetValue(entry, kCGWindowNumber);
+		CGWindowID windowId;
+		CFNumberGetValue(value, kCFNumberIntType, &windowId);
+		if (alpha > 0) {
+			data->wins.push_back(OSWindow(OSRawWindow{ .winid = windowId }));
+		}
+	}
+}
+
+vector<OSWindow> OSGetRsHandles()
+{
+	CFArrayRef windowList = CGWindowListCopyWindowInfo(
+		kCGWindowListOptionAll | kCGWindowListExcludeDesktopElements, kCGNullWindowID);
+
+	filterData *windowFilterData = new filterData;
+	windowFilterData->wins = vector<OSWindow>();
+	windowFilterData->windowId = 0;
+	windowFilterData->windowName = CFSTR("runescape");
+	windowFilterData->prefix = CFSTR("rs2client");
+
+	CFArrayApplyFunction(windowList, CFRangeMake(0, CFArrayGetCount(windowList)),
+		&filterWindows, (void *)(windowFilterData));
+	return windowFilterData->wins;
+}
+
+OSWindow OSGetActiveWindow()
+{
+	pid_t pid = [AOUtil focusedPid];
+	CGWindowID windowId = [AOUtil appFocusedWindow:pid];
+	return OSWindow(OSRawWindow{ .winid = windowId });
 }
 
 bool OSWindow::IsValid()
 {
-	if (this->hwnd.winid == 0) {
-		return false;
-	}
-
-	return true;
+	return this->handle.winid != 0;
 }
 
 std::string OSWindow::GetTitle()
 {
-	return "";
+	auto windowId = static_cast<CGWindowID>(this->handle.winid);
+	NSString *title = [AOUtil appTitle:[AOUtil pidForWindow:windowId]];
+	std::string stdtitle;
+	if ([title length] == 0) {
+		return stdtitle;
+	}
+	stdtitle = std::string([title cStringUsingEncoding:kCFStringEncodingUTF8], [title length]);
+	return stdtitle;
 }
 
 Napi::Value OSWindow::ToJS(Napi::Env env)
 {
-	return Napi::BigInt::New(env, (uint64_t)this->hwnd.winid);
+	return Napi::BigInt::New(env, static_cast<uint64_t>(this->handle.winid));
 }
 
 bool OSWindow::operator==(const OSWindow &other) const
 {
-	return memcmp(&this->hwnd, &other.hwnd, sizeof(this->hwnd)) == 0;
+	return memcmp(&this->handle, &other.handle, sizeof(this->handle)) == 0;
 }
 
 bool OSWindow::operator<(const OSWindow &other) const
 {
-	return memcmp(&this->hwnd, &other.hwnd, sizeof(this->hwnd)) < 0;
+	return memcmp(&this->handle, &other.handle, sizeof(this->handle)) < 0;
 }
 
 OSWindow OSWindow::FromJsValue(const Napi::Value jsval)
@@ -59,94 +187,89 @@ OSWindow OSWindow::FromJsValue(const Napi::Value jsval)
 	if (!lossless) {
 		Napi::RangeError::New(jsval.Env(), "Invalid handle").ThrowAsJavaScriptException();
 	}
-	return OSWindow(OSRawWindow{ .wnd = (NSView *)handleint });
-}
-
-std::vector<uint32_t> OSGetProcessesByName(std::string name, uint32_t parentpid)
-{
-	std::vector<uint32_t> out;
-	std::unique_ptr<pid_t[]> buf;
-	int no_proc;
-	if (parentpid == 0) {
-		no_proc = proc_listpids(PROC_ALL_PIDS, 0, NULL, 0);
-		if (no_proc == -1) {
-			throw new std::runtime_error("Unable to get pids");
-		}
-		buf = std::unique_ptr<pid_t[]>{ new pid_t[no_proc / sizeof(pid_t)] };
-
-		no_proc = proc_listpids(PROC_ALL_PIDS, 0, buf.get(), no_proc);
-		if (no_proc == -1) {
-			throw new std::runtime_error("Unable to get pids");
-		}
-	} else {
-		// this path is not tested
-		no_proc = proc_listchildpids(parentpid, NULL, 0);
-		if (no_proc == -1) {
-			throw new std::runtime_error("Unable to get pids");
-		}
-		buf = std::unique_ptr<pid_t[]>{ new pid_t[no_proc / sizeof(pid_t)] };
-
-		no_proc = proc_listchildpids(parentpid, buf.get(), no_proc);
-		if (no_proc == -1) {
-			throw new std::runtime_error("Unable to get pids");
-		}
-	}
-	no_proc /= sizeof(pid_t);
-
-	for (int i = 0; i < no_proc; i++) {
-		if (OSGetProcessName(buf[i]) == name) {
-			out.push_back(buf[i]);
-		}
-	}
-
-	return out;
-}
-
-OSWindow OSFindMainWindow(unsigned long process_id)
-{
-	return OSWindow(DEFAULT_OSRAWWINDOW);
+	return OSWindow(OSRawWindow{ .winid = handleint });
 }
 
 void OSSetWindowParent(OSWindow wnd, OSWindow parent)
 {
+	[AOUtil macOSSetParent:parent forWindow:wnd];
 }
 
-void OSCaptureDesktopMulti(OSWindow wnd, vector<CaptureRect> rects)
+/**
+ * Defines which region of a window can be clicked
+ * Implemented only on X11 Linux as a replacement for electron's setIgnoreMouseEvents()
+ */
+void OSSetWindowShape(
+	__attribute__((unused)) OSWindow wnd, __attribute__((unused)) vector<JSRectangle> rects)
 {
-}
-void OSCaptureWindowMulti(OSWindow wnd, vector<CaptureRect> rects)
-{
+	//No op on macos
 }
 
-void OSCaptureMulti(OSWindow wnd, CaptureMode mode, vector<CaptureRect> rects, Napi::Env env)
+/**
+ * Returns true when the left/main mouse button is down, even in another process and regardless of message pump state
+ */
+bool OSGetMouseState()
 {
-	switch (mode) {
-	case CaptureMode::Desktop: {
-		OSCaptureDesktopMulti(wnd, rects);
-		break;
+	return [AOUtil macOSGetMouseState];
+}
+
+void OSCaptureMulti(OSWindow wnd, __attribute__((unused)) CaptureMode mode,
+	vector<CaptureRect> rects, __attribute__((unused)) Napi::Env env)
+{
+	[AOUtil capture:wnd withRects:rects];
+}
+
+static Napi::ThreadSafeFunction g_nodeThreadTsfn;
+
+void OSNewWindowListener(OSWindow wnd, WindowEventType type, Napi::Function callback)
+{
+	if (wnd.handle.winid == 0 && type != WindowEventType::Show) {
+		return;
 	}
-	case CaptureMode::Window:
-		OSCaptureWindowMulti(wnd, rects);
-		break;
-	default:
-		throw Napi::RangeError::New(env, "Capture mode not supported");
-	}
-}
 
-std::string OSGetProcessName(int pid)
-{
-	char namebuf[255];
-	if (proc_name(pid, namebuf, sizeof(namebuf)) == -1) {
-		throw new std::runtime_error("Unable to get process name");
+	// If g_nodeThreadTsfn is uninitialized, we're being called directly
+	// from JS on the Node thread — safe to create TSFNs
+	if (!g_nodeThreadTsfn) {
+		auto dummy = Napi::Function::New(callback.Env(), [](const Napi::CallbackInfo &) {});
+		g_nodeThreadTsfn = Napi::ThreadSafeFunction::New(
+			callback.Env(), dummy, "nodethread", 0, 1, [](Napi::Env) {});
 	}
 
-	return std::string(namebuf);
+	CGWindowID winid = (CGWindowID)wnd.handle.winid;
+	WindowEventType capturedType = type;
+
+	auto persistedRef = std::make_shared<Napi::FunctionReference>(Napi::Persistent(callback));
+
+	g_nodeThreadTsfn.NonBlockingCall([persistedRef, winid, capturedType](
+						 Napi::Env env, Napi::Function) {
+		auto tsfn =
+			std::make_shared<Napi::ThreadSafeFunction>(Napi::ThreadSafeFunction::New(
+				env, persistedRef->Value(), "event", 0, 1, [](Napi::Env) {}));
+		auto ref = persistedRef;
+		dispatch_async(dispatch_get_main_queue(), ^{
+			[AOUtil macOSNewWindowListener:winid type:capturedType tsfn:tsfn ref:ref];
+		});
+	});
 }
 
-void OSNewWindowListener(OSWindow wnd, WindowEventType type, Napi::Function cb)
+void OSRemoveWindowListener(OSWindow wnd, WindowEventType type, Napi::Function callback)
 {
+	[AOUtil macOSRemoveWindowListener:(CGWindowID)wnd.handle.winid type:type callback:callback];
 }
 
-void OSRemoveWindowListener(OSWindow wnd, WindowEventType type, Napi::Function cb)
+JSPoint OSGetCursorScreenPoint()
 {
+	if (g_hasMousePos.load(std::memory_order_relaxed)) {
+		return JSPoint((int32_t)g_lastMouseX.load(std::memory_order_relaxed),
+			(int32_t)g_lastMouseY.load(std::memory_order_relaxed));
+	}
+
+	CGEventRef event = CGEventCreate(NULL);
+	if (!event)
+		return JSPoint(0, 0);
+
+	CGPoint pt = CGEventGetLocation(event);
+	CFRelease(event);
+
+	return JSPoint(static_cast<int32_t>(pt.x), static_cast<int32_t>(pt.y));
 }

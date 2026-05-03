@@ -41,8 +41,10 @@ struct OSWindow {
 	}
 	// The bounderies of the window including title bar and borders in screen coordinates
 	JSRectangle GetBounds();
-	// The boundaries of the client area of the window, without any title bar of borders
+	// The boundaries of the client area of the window, without any title bar or borders
 	JSRectangle GetClientBounds();
+	// Get the display scaling for this game window
+	float OSGetScale();
 	// Is the handle valid and does the window still exist
 	bool IsValid();
 	// Gets the text in the window title bar
@@ -112,13 +114,14 @@ void OSRemoveWindowListener(OSWindow wnd, WindowEventType type, Napi::Function c
  * Defines which region of a window can be clicked
  * Implemented only on X11 Linux as a replacement for electron's setIgnoreMouseEvents()
  */
-void OSSetWindowShape(OSWindow wnd, vector<JSRectangle> rects);
-
-// Best-effort shutdown for native OS backends (stops threads, releases callbacks)
 #if defined(OS_LINUX)
+// Best-effort shutdown for native OS backends (stops threads, releases callbacks)
 void OSShutdownX11();
+void OSSetWindowShape(OSWindow wnd, vector<JSRectangle> rects);
 #else
 inline void OSShutdownX11()
 {
 }
+void OSSetWindowShape(
+	__attribute__((unused)) OSWindow wnd, __attribute__((unused)) vector<JSRectangle> rects);
 #endif

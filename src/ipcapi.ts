@@ -1,12 +1,13 @@
 import * as a1lib from "alt1";
 import { IpcMain, IpcMainEvent, IpcMainInvokeEvent, screen } from "electron/main"
-import { BrowserWindow } from "electron";
+import { BrowserWindow, nativeImage } from "electron";
 import { sameDomainResolve } from "./lib";
 import { admins, fixTooltip, getManagedAppWindow, ManagedWindow, openApp } from "./main";
 import { native } from "./native";
 import { settings } from "./settings";
-import { FlatImageData, OverlayCommand, Rectangle, RsClientState } from "./shared";
+import { FlatImageData, OverlayCommand, Rectangle, RsClientState, imageDataFrom } from "./shared";
 import { getRsInstanceFromWnd, rsInstances } from "./rsinstance";
+import * as fs from 'fs';
 
 const snapdistance = 10;
 const snapcornerlength = 30;
@@ -251,22 +252,24 @@ export function initIpcApi(ipcMain: IpcMain) {
 				? (((mx & 0xFFFF) << 16) | (my & 0xFFFF))
 				: -1;
 
-		const state: RsClientState = {
-			active: client.isActive,
-			clientRect: r,
-			lastActiveTime: client.lastActiveTime,
-			ping: 10, // TODO
-			scaling: 1, // TODO
+		let wnd = expectAppWindow(e);
+		let state: RsClientState = {
+			active: wnd.rsClient.isActive,
+			clientRect: wnd.rsClient.window.getClientBounds(),
+			lastActiveTime: wnd.rsClient.lastActiveTime,
+			ping: 10,//TODO
+			scaling: wnd.rsClient.window.getScale(),
 			captureMode: settings.captureMode,
-			mousePosition,
+			mousePosition: mousePosition
 		};
-
 		e.returnValue = { value: state };
 	}));
 
 	ipcMain.handle("capture", (e: any, x: any, y: any, width: any, height: any) => {
 		let client = expectPermittedRsClient(e);
-		return native.captureWindowMulti(client.window.handle, settings.captureMode, { main: { x, y, width, height } }).main;
+		let capt = native.captureWindowMulti(client.window.handle, settings.captureMode, { main: { x, y, width, height } });
+		let data: ImageData = imageDataFrom(capt.main, width, height);
+		return capt.main;
 	});
 
 	ipcMain.handle("capturemulti", (e, rects: { [key: string]: Rectangle }) => {
@@ -278,6 +281,11 @@ export function initIpcApi(ipcMain: IpcMain) {
 		let wnd = expectAppWindow(e);
 		wnd.activeTooltip = text;
 		fixTooltip();
+	}));
+
+	ipcMain.on('clearoverlay', syncwrap((e) => {
+		let wnd = expectAppWindow(e);
+		wnd.rsClient.clearOverlay(wnd.appFrameId);
 	}));
 
 	ipcMain.on("overlay", syncwrap((e, commands: OverlayCommand[]) => {

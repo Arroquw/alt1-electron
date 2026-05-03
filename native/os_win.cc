@@ -31,6 +31,7 @@ JSRectangle OSWindow::GetBounds()
 	}
 	return JSRectangle(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
 }
+
 JSRectangle OSWindow::GetClientBounds()
 {
 	RECT rect;
@@ -39,6 +40,11 @@ JSRectangle OSWindow::GetClientBounds()
 	MapWindowPoints(this->handle, HWND_DESKTOP, (LPPOINT)&rect, 2);
 	return JSRectangle(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
 }
+
+float OSWindow::OSGetScale()
+{
+	return 1.0;
+}
 bool OSWindow::IsValid()
 {
 	if (!this->handle) {
@@ -46,6 +52,7 @@ bool OSWindow::IsValid()
 	}
 	return IsWindow(this->handle);
 }
+
 string OSWindow::GetTitle()
 {
 	int len = GetWindowTextLengthA(this->handle);
@@ -56,6 +63,7 @@ string OSWindow::GetTitle()
 	GetWindowTextA(this->handle, &buf[0], len + 1);
 	return string(&buf[0]);
 }
+
 OSWindow OSWindow::FromJsValue(const Napi::Value jsval)
 {
 	auto handle = jsval.As<Napi::BigInt>();
