@@ -16,9 +16,9 @@ typedef struct filterData {
 	CFStringRef prefix;
 } filterData;
 
-CGRect OSWindow::GetNativeBounds()
+static CGRect GetNativeBounds(OSRawWindow handle)
 {
-	CFDictionaryRef windowInfo = [AOUtil findWindow:this->handle.winid];
+	CFDictionaryRef windowInfo = [AOUtil findWindow:handle.winid];
 	if (windowInfo == nullptr) {
 		return [[NSScreen screens][0] frame];
 	}
@@ -28,7 +28,7 @@ CGRect OSWindow::GetNativeBounds()
 	return bounds;
 }
 
-CGRect OSWindow::FlipY(CGRect rect)
+static CGRect FlipY(CGRect rect)
 {
 	CGFloat primaryScreenHeight = [NSScreen screens][0].frame.size.height;
 	rect.origin.y = primaryScreenHeight - rect.origin.y - rect.size.height;
@@ -37,14 +37,14 @@ CGRect OSWindow::FlipY(CGRect rect)
 
 JSRectangle OSWindow::GetBounds()
 {
-	CGRect r = FlipY(GetNativeBounds());
+	CGRect r = FlipY(GetNativeBounds(this->handle));
 	return JSRectangle(r.origin.x, r.origin.y, r.size.width, r.size.height);
 }
 
 JSRectangle OSWindow::GetClientBounds()
 {
-	CGRect r = FlipY(GetNativeBounds());
-	BOOL isFs = [AOUtil isFullScreen:GetNativeBounds()];
+	CGRect r = FlipY(GetNativeBounds(this->handle));
+	BOOL isFs = [AOUtil isFullScreen:GetNativeBounds(this->handle)];
 	JSRectangle jbounds(r.origin.x, r.origin.y, r.size.width, r.size.height);
 	if (!isFs) {
 		jbounds.y += TITLE_BAR_HEIGHT;
