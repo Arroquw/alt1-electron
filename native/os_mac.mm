@@ -16,42 +16,39 @@ typedef struct filterData {
 	CFStringRef prefix;
 } filterData;
 
-JSRectangle OSWindow::GetBounds()
+CGRect OSWindow::GetNativeBounds()
 {
 	CFDictionaryRef windowInfo = [AOUtil findWindow:this->handle.winid];
-
-	CGRect screenBounds;
 	if (windowInfo == nullptr) {
-		screenBounds = [[NSScreen screens][0] frame];
-	} else {
-		CGRectMakeWithDictionaryRepresentation(
-			(CFDictionaryRef)CFDictionaryGetValue(windowInfo, kCGWindowBounds),
-			&screenBounds);
+		return [[NSScreen screens][0] frame];
 	}
-	JSRectangle jbounds(static_cast<int>(screenBounds.origin.x),
-		static_cast<int>(screenBounds.origin.y), static_cast<int>(screenBounds.size.width),
-		static_cast<int>(screenBounds.size.height));
-	return jbounds;
+	CGRect bounds;
+	CGRectMakeWithDictionaryRepresentation(
+		(CFDictionaryRef)CFDictionaryGetValue(windowInfo, kCGWindowBounds), &bounds);
+	return bounds;
+}
+
+CGRect OSWindow::FlipY(CGRect rect)
+{
+	CGFloat primaryScreenHeight = [NSScreen screens][0].frame.size.height;
+	rect.origin.y = primaryScreenHeight - rect.origin.y - rect.size.height;
+	return rect;
+}
+
+JSRectangle OSWindow::GetBounds()
+{
+	CGRect r = FlipY(GetNativeBounds());
+	return JSRectangle(r.origin.x, r.origin.y, r.size.width, r.size.height);
 }
 
 JSRectangle OSWindow::GetClientBounds()
 {
-	CFDictionaryRef windowInfo = [AOUtil findWindow:this->handle.winid];
-	CGRect screenBounds;
-	if (windowInfo == nullptr) {
-		screenBounds = [[NSScreen screens][0] frame];
-	} else {
-		CGRectMakeWithDictionaryRepresentation(
-			(CFDictionaryRef)CFDictionaryGetValue(windowInfo, kCGWindowBounds),
-			&screenBounds);
-	}
-	BOOL isFs = [AOUtil isFullScreen:screenBounds];
-	JSRectangle jbounds(static_cast<int>(screenBounds.origin.x),
-		static_cast<int>(screenBounds.origin.y), static_cast<int>(screenBounds.size.width),
-		static_cast<int>(screenBounds.size.height));
+	CGRect r = FlipY(GetNativeBounds());
+	BOOL isFs = [AOUtil isFullScreen:GetNativeBounds()];
+	JSRectangle jbounds(r.origin.x, r.origin.y, r.size.width, r.size.height);
 	if (!isFs) {
 		jbounds.y += TITLE_BAR_HEIGHT;
-		jbounds.height = jbounds.height - TITLE_BAR_HEIGHT;
+		jbounds.height -= TITLE_BAR_HEIGHT;
 	}
 	return jbounds;
 }
