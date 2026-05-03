@@ -198,32 +198,6 @@ OSWindow OSWindow::FromJsValue(const Napi::Value jsval)
 }
 
 /*
- * @brief Checks if an xcb window has its size locked
- *
- * The game client itself does not lock its size, but all of the fake windows do.
- *
- * @param window The window to be checked
- *
- * @return true window has its size locked
- * @return false window does not have its size locked
- *
- */
-bool HasLockedSize(const xcb_window_t window)
-{
-	xcb_size_hints_t hints;
-	if (!xcb_icccm_get_wm_normal_hints_reply(connection,
-		    xcb_icccm_get_wm_normal_hints(connection, window), &hints, nullptr)) {
-		return false;
-	}
-
-	if ((hints.flags & XCB_ICCCM_SIZE_HINT_P_MIN_SIZE) &&
-		(hints.flags & XCB_ICCCM_SIZE_HINT_P_MAX_SIZE)) {
-		return hints.min_width == hints.max_width && hints.min_height == hints.max_height;
-	}
-	return false;
-}
-
-/*
  * @brief checks if the window is mapped or not
  *
  * The invisible windows should return unmapped.
@@ -329,8 +303,7 @@ bool IsRsWindow(const xcb_window_t window)
 			std::unique_ptr<xcb_get_property_reply_t, decltype(&free)> replyTransient{
 				xcb_get_property_reply(connection, cookieTransient, NULL), &free
 			};
-			if (IsViewable(window) && IsRsWindowProperties(str_title, classname) &&
-				!HasLockedSize(window)) {
+			if (IsViewable(window) && IsRsWindowProperties(str_title, classname)) {
 				if (replyTransient &&
 					xcb_get_property_value_length(replyTransient.get()) == 0) {
 					std::cout << "Found correct RuneScape window: " << str_title
