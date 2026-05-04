@@ -224,8 +224,17 @@ export class ManagedWindow {
 	activeTooltip = "";
 
 	constructor(app: Bookmark, rsclient: RsInstance) {
-		let posrect = app.lastRect;
-		if (!posrect) {
+        let posrect = app.lastRect;
+        
+        const clientBounds = rsclient.window.getBounds();
+        
+        const isOutOfBounds = !posrect ||
+            posrect.left < -clientBounds.width ||
+            posrect.left > clientBounds.width * 2 ||
+            posrect.top < -clientBounds.height ||
+            posrect.top > clientBounds.height * 2;
+        
+		if (!posrect || isOutOfBounds) {
 			posrect = {
 				left: 20, top: 20, width: app.defaultWidth, height: app.defaultHeight,
 				bot: 0, right: 0,

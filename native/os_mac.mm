@@ -16,11 +16,21 @@ typedef struct filterData {
 	CFStringRef prefix;
 } filterData;
 
+static NSScreen *GetPrimaryScreen()
+{
+	for (NSScreen *screen in [NSScreen screens]) {
+		if (NSEqualPoints(screen.frame.origin, NSZeroPoint)) {
+			return screen;
+		}
+	}
+	return [NSScreen screens][0];   // fallback
+}
+
 static CGRect GetNativeBounds(OSRawWindow handle)
 {
 	CFDictionaryRef windowInfo = [AOUtil findWindow:handle.winid];
 	if (windowInfo == nullptr) {
-		return [[NSScreen screens][0] frame];
+		return [GetPrimaryScreen frame];
 	}
 	CGRect bounds;
 	CGRectMakeWithDictionaryRepresentation(
@@ -30,15 +40,22 @@ static CGRect GetNativeBounds(OSRawWindow handle)
 
 static CGRect FlipY(CGRect rect)
 {
-	CGFloat primaryScreenHeight = [NSScreen screens][0].frame.size.height;
-	rect.origin.y = primaryScreenHeight - rect.origin.y - rect.size.height;
+	CGFloat totalHeight = 0;
+	for (NSScreen *screen in [NSScreen screens]) {
+		CGFloat bottom = screen.frame.origin.y + screen.frame.size.height;
+		if (bottom > totalHeight)
+			totalHeight = bottom;
+	}
+	rect.origin.y = totalHeight - rect.origin.y - rect.size.height;
 	return rect;
 }
 
 JSRectangle OSWindow::GetBounds()
 {
 	CGRect r = FlipY(GetNativeBounds(this->handle));
-	return JSRectangle(r.origin.x, r.origin.y, r.size.width, r.size.height);
+	float scale = OSGetScale();
+	return JSRectangle(r.origin.x / scale, r.origin.y / scale, r.size.width / scale,
+		r.size.height / scale);
 }
 
 JSRectangle OSWindow::GetClientBounds()
