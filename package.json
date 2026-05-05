@@ -96,9 +96,12 @@
 		},
 		"mac": {
 			"target": [
-				"dmg"
-			],
-			"arch": "universal"
+            {
+                "target": "dmg",
+                "arch": [
+                    "universal"
+                ]
+            },
 		}
-	}
+	}, 
 }
