@@ -30,7 +30,7 @@ static CGRect GetNativeBounds(OSRawWindow handle)
 {
 	CFDictionaryRef windowInfo = [AOUtil findWindow:handle.winid];
 	if (windowInfo == nullptr) {
-		return [GetPrimaryScreen frame];
+		return [(id)GetPrimaryScreen frame];
 	}
 	CGRect bounds;
 	CGRectMakeWithDictionaryRepresentation(
@@ -60,13 +60,19 @@ JSRectangle OSWindow::GetBounds()
 
 JSRectangle OSWindow::GetClientBounds()
 {
-	CGRect r = FlipY(GetNativeBounds(this->handle));
-	BOOL isFs = [AOUtil isFullScreen:GetNativeBounds(this->handle)];
+	CGRect native = GetNativeBounds(this->handle);
+	CGRect r = FlipY(native);
 	JSRectangle jbounds(r.origin.x, r.origin.y, r.size.width, r.size.height);
-	if (!isFs) {
+
+	if ([AOUtil isFullScreen:native]) {
+		CGFloat menuBarHeight = [NSApp mainMenu].menuBarHeight;
+		jbounds.y += menuBarHeight;
+		jbounds.height -= menuBarHeight;
+	} else {
 		jbounds.y += TITLE_BAR_HEIGHT;
 		jbounds.height -= TITLE_BAR_HEIGHT;
 	}
+
 	return jbounds;
 }
 
