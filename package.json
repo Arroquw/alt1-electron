@@ -96,12 +96,13 @@
 		},
 		"mac": {
 			"target": [
-            {
-                "target": "dmg",
-                "arch": [
-                    "universal"
-                ]
-            }
-		}
+                {
+                    "target": "dmg",
+                    "arch": [
+                        "universal"
+                    ]
+                }
+			] 
+		} 
 	}
 }
