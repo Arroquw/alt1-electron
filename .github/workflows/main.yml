@@ -88,4 +88,4 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload nightly release/*.exe release/latest-* --clobber
+          gh release upload nightly release/*.exe release/*.yml --clobber
