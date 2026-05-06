@@ -9,31 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  cleanup:
-    runs-on: ubuntu-latest
-    steps:
-
-      - name: Publish rolling Nightly release and clear old nightly assets
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          gh release create nightly --title "Nightly" --latest --notes "Automated build" || true
-
-          assets=$(gh release view nightly --json assets --jq '.assets[].name')
-          for asset in $assets; do
-            gh release delete-asset nightly "$asset" -y
-          done
-
-      - name: Move nightly tag
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh api -X PATCH repos/${{ github.repository }}/git/refs/tags/nightly -f sha="${GITHUB_SHA}"
-
   build:
-    needs: cleanup
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -52,39 +28,75 @@ jobs:
         with:
           node-version: 24
 
-      - name: Set npm version
+      - name: Set nightly version
         shell: bash
         run: |
           DATE=$(date +%Y%m%d%H%M)
-          # e.g. 0.202603071230.0-nightly
           npm version "0.${DATE}.0-nightly" --no-git-tag-version
 
       - name: Build (no publish)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm ci
           npm run build -- --mode production
           npm run dist -- --publish never
 
-      - name: Upload Linux artifacts
+      - name: Upload Linux to Artifacts
         if: matrix.os == 'ubuntu-latest'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload nightly release/*.AppImage release/latest-*.yml --clobber
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: |
+            release/*.AppImage
+            release/latest-*.yml
+          retention-days: 1
 
-      - name: Upload MacOS artifacts
+      - name: Upload MacOS to Artifacts
         if: matrix.os == 'macos-latest'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload nightly release/*.dmg release/latest-*.yml --clobber
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build
+          path: |
+            release/*.dmg
+            release/latest-*.yml
+          retention-days: 1
 
-      - name: Upload Windows artifacts
-        shell: bash
+      - name: Upload Windows to Artifacts
         if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: |
+            release/*.exe
+            release/*.yaml
+          retention-days: 1
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: final-release-files
+          merge-multiple: true
+
+      - name: Publish Nightly release & Clear old assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          gh release upload nightly release/*.exe release/*.yml --clobber
+          gh release create nightly --title "Nightly" --latest --notes "Automated build" || true
+
+          assets=$(gh release view nightly --json assets --jq '.assets[].name')
+          for asset in $assets; do
+            gh release delete-asset nightly "$asset" -y
+          done
+
+          gh release upload nightly final-release-files/* --clobber
+
+      - name: Move nightly tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh api -X PATCH repos/${{ github.repository }}/git/refs/tags/nightly -f sha="${GITHUB_SHA}"
