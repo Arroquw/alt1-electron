@@ -35,6 +35,8 @@ jobs:
           npm version "0.${DATE}.0-nightly" --no-git-tag-version
 
       - name: Build (no publish)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm ci
           npm run build -- --mode production
