@@ -12,8 +12,8 @@ import "./index.html";
 (window as any).remote = remote;
 let appview: Electron.WebviewTag | undefined = undefined;
 let appcontents: WebContents | undefined = undefined;
+remote.getGlobal("Alt1lite") ?? remote.require("./main")
 let mainmodule = remote.getGlobal("Alt1lite") as typeof import("../main");
-//TODO backup if this fails
 var thiswindow = mainmodule.getManagedWindow(remote.getCurrentWebContents())!;
 
 window.addEventListener("DOMContentLoaded", () => {

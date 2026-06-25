@@ -19,8 +19,8 @@ if (process.env.NODE_ENV === "development") {
 	patchImageDataShow();
 	//exposed on global for debugging purposes
 	(global as any).native = require("./native");
-	(global as any).Alt1lite = require("./main");
 }
+(global as any).Alt1lite = require("./main");
 
 export const admins = new Set<number>();
 export const managedWindows: ManagedWindow[] = [];
