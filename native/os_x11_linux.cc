@@ -26,11 +26,12 @@ using namespace priv_os_x11;
 static constexpr auto rsName = "RuneScape";
 static constexpr auto protonName = "steam_proton";
 
-static constexpr std::array<std::string_view, 4> rsClassNames = {
+static constexpr std::array<std::string_view, 5> rsClassNames = {
 	rsName,
 	"steam_app_1343400",
 	"rs2client.exe",
 	protonName,
+	"steam_app_default",
 };
 
 struct TrackedEvent {
