@@ -13,7 +13,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-2022]
+        os: [ubuntu-22.04, macos-15, windows-2022]
 
     steps:
       - name: Check out Git repository
@@ -21,7 +21,7 @@ jobs:
 
       - name: Install dependencies
         run: sudo apt install pkg-config libxcb-icccm4-dev libxcb-shm0-dev libxcb-composite0-dev libxcb-ewmh-dev libxcb-record0-dev libxcb-shape0-dev
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-22.04'
 
       - name: Install Node.js, NPM
         uses: actions/setup-node@v6
@@ -43,7 +43,7 @@ jobs:
           npm run dist -- --publish never
 
       - name: Upload Linux to Artifacts
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-22.04'
         uses: actions/upload-artifact@v4
         with:
           name: linux-build
@@ -53,7 +53,7 @@ jobs:
           retention-days: 1
 
       - name: Upload MacOS to Artifacts
-        if: matrix.os == 'macos-latest'
+        if: matrix.os == 'macos-15'
         uses: actions/upload-artifact@v4
         with:
           name: macos-build
@@ -74,7 +74,7 @@ jobs:
 
   publish:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Download Build Artifacts
         uses: actions/download-artifact@v4
